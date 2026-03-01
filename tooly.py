@@ -1,4 +1,4 @@
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 __author__ = "SuperDragon777"
 __all__ = ["ColorSystem"]
 
@@ -57,6 +57,18 @@ class ColorSystem:
     
     def info(self, text):
         return self.blue(f"[i] {text}")
+        
+    def highlight(self, text: str, keywords: list[str], color: str = "yellow") -> str:
+        colorize = getattr(self, color, self.yellow)
+        for kw in keywords:
+            text = text.replace(kw, colorize(kw))
+        return text
+        
+    def indent(self, text: str, level: int = 1) -> str:
+        palette = ["94", "92", "93", "91", "95"]
+        code = palette[level % len(palette)]
+        prefix = "  " * level + "│ "
+        return self._colorize(prefix, code) + text
 
 def typewrite(
     text: str,
@@ -101,6 +113,31 @@ def _format_duration(seconds: float, precision: int = 3) -> str:
         minutes = int((seconds % 3600) // 60)
         secs = seconds % 60
         return f"{hours}h {minutes}m {secs:.{precision}f}s"
+            
+@contextmanager
+def spinner(label: str = "Loading", frames="⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏", done_msg: str = "Done"):
+    import threading
+    colors = ColorSystem()
+    stop_event = threading.Event()
+
+    def _spin():
+        i = 0
+        while not stop_event.is_set():
+            sys.stdout.write(f"\r{frames[i % len(frames)]} {label}...")
+            sys.stdout.flush()
+            i += 1
+            time.sleep(0.1)
+
+    t = threading.Thread(target=_spin, daemon=True)
+    t.start()
+    try:
+        yield
+    finally:
+        stop_event.set()
+        t.join()
+        sys.stdout.write("\r" + " " * (len(label) + 10) + "\r")
+        sys.stdout.write(colors.success(done_msg) + "\n")  # ← вот это
+        sys.stdout.flush()
 
 if __name__ == "__main__":
     print(ColorSystem().info("Tooly v{}".format(__version__)))
