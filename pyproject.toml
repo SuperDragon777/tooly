@@ -23,3 +23,6 @@ classifiers = [
 
 [project.urls]
 Homepage = "https://github.com/SuperDragon777/tooly"
+
+[tool.hatch.build.targets.wheel]
+packages = ["tooly.py"]
