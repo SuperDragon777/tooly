@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "tooly-dev"
+version = "1.1.0"
+description = "Lightweight terminal utilities"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [
+    { name = "SuperDragon777" }
+]
+requires-python = ">=3.8"
+keywords = ["terminal", "cli", "colors", "spinner", "developer-tools"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Environment :: Console",
+    "Topic :: Terminals",
+]
+
+[project.urls]
+Homepage = "https://github.com/SuperDragon777/tooly"
