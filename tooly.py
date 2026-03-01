@@ -7,6 +7,8 @@ import sys
 import os
 import time
 from contextlib import contextmanager
+import difflib
+from enum import Enum
 
 class ColorSystem:
     def __init__(self):
@@ -136,8 +138,128 @@ def spinner(label: str = "Loading", frames="⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏", don
         stop_event.set()
         t.join()
         sys.stdout.write("\r" + " " * (len(label) + 10) + "\r")
-        sys.stdout.write(colors.success(done_msg) + "\n")  # ← вот это
+        sys.stdout.write(colors.success(done_msg) + "\n")
         sys.stdout.flush()
+
+class DiffMode(Enum):
+    CHAR = "char"
+    WORD = "word"
+    LINE = "line"
+
+
+def diff_highlight(
+    a: str,
+    b: str,
+    mode: DiffMode | str = DiffMode.WORD,
+    *,
+    label_a: str = "A",
+    label_b: str = "B",
+    context_lines: int = 2,
+    show_legend: bool = True,
+) -> str:
+    if isinstance(mode, str):
+        mode = DiffMode(mode)
+
+    if mode == DiffMode.LINE:
+        return _diff_line(a, b, label_a, label_b, context_lines, show_legend)
+    elif mode == DiffMode.WORD:
+        return _diff_inline(a, b, label_a, label_b, show_legend, split_fn=str.split)
+    else:
+        return _diff_inline(a, b, label_a, label_b, show_legend, split_fn=list)
+
+
+def _apply_opcodes(tokens_a, tokens_b, sep):
+    colors = ColorSystem()
+    matcher = difflib.SequenceMatcher(None, tokens_a, tokens_b, autojunk=False)
+    out_a, out_b = [], []
+
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
+        chunk_a = sep.join(tokens_a[i1:i2])
+        chunk_b = sep.join(tokens_b[j1:j2])
+
+        if tag == "equal":
+            out_a.append(chunk_a)
+            out_b.append(chunk_b)
+        elif tag == "delete":
+            out_a.append(colors.red(chunk_a))
+        elif tag == "insert":
+            out_b.append(colors.green(chunk_b))
+        elif tag == "replace":
+            out_a.append(colors.red(chunk_a))
+            out_b.append(colors.green(chunk_b))
+
+    return sep.join(out_a), sep.join(out_b)
+
+
+def _diff_inline(a, b, label_a, label_b, show_legend, split_fn):
+    colors = ColorSystem()
+    tokens_a = split_fn(a)
+    tokens_b = split_fn(b)
+    sep = "" if split_fn is list else " "
+
+    line_a, line_b = _apply_opcodes(tokens_a, tokens_b, sep)
+
+    legend = ""
+    if show_legend:
+        legend = (
+            colors.grey("  legend: ")
+            + colors.red("removed")
+            + colors.grey(" / ")
+            + colors.green("added")
+            + "\n"
+        )
+
+    label_width = max(len(label_a), len(label_b)) + 2
+    return (
+        legend
+        + colors.bold(f"{label_a:<{label_width}}") + line_a + "\n"
+        + colors.bold(f"{label_b:<{label_width}}") + line_b
+    )
+
+
+def _diff_line(a, b, label_a, label_b, context_lines, show_legend):
+    colors = ColorSystem()
+    lines_a = a.splitlines(keepends=True)
+    lines_b = b.splitlines(keepends=True)
+
+    legend = ""
+    if show_legend:
+        legend = (
+            colors.grey(f"--- {label_a}\n")
+            + colors.grey(f"+++ {label_b}\n")
+        )
+
+    parts = [legend]
+    matcher = difflib.SequenceMatcher(None, lines_a, lines_b, autojunk=False)
+    groups = list(matcher.get_grouped_opcodes(context_lines))
+
+    if not groups:
+        parts.append(colors.grey("(no differences)\n"))
+        return "".join(parts)
+
+    for group in groups:
+        first, last = group[0], group[-1]
+        i1 = first[1]
+        i2 = last[2]
+        j1 = first[3]
+        j2 = last[4]
+        parts.append(colors.grey(f"@@ -{i1+1},{i2-i1} +{j1+1},{j2-j1} @@\n"))
+
+        for tag, i1, i2, j1, j2 in group:
+            if tag == "equal":
+                for line in lines_a[i1:i2]:
+                    parts.append(colors.grey(" " + line.rstrip("\n")) + "\n")
+            elif tag in ("delete", "replace"):
+                for line in lines_a[i1:i2]:
+                    parts.append(colors.red("-" + line.rstrip("\n")) + "\n")
+                if tag == "replace":
+                    for line in lines_b[j1:j2]:
+                        parts.append(colors.green("+" + line.rstrip("\n")) + "\n")
+            elif tag == "insert":
+                for line in lines_b[j1:j2]:
+                    parts.append(colors.green("+" + line.rstrip("\n")) + "\n")
+    return "".join(parts)
+
 
 if __name__ == "__main__":
     print(ColorSystem().info("Tooly v{}".format(__version__)))
