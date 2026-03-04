@@ -75,3 +75,9 @@ Methods:
 
 tooly.userinput("Enter your name: ", validator=lambda name: name.isalpha(), error_msg="Invalid name. Try again.")
 tooly.userinput("Enter your age: ", validator=lambda name: name.isdigit(), error_msg="Invalid age. Try again.")
+
+#* Recorder example
+with tooly.recorder("example_session.log"):
+    print("Recorder example...")
+    name = tooly.userinput("Enter your name: ", validator=lambda name: name.isalpha(), error_msg="Invalid name. Try again.")
+    print(f"Hello, {name}!")

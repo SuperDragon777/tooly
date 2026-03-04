@@ -1,6 +1,6 @@
-__version__ = "1.1.0"
+__version__ = "1.2.0"
 __author__ = "SuperDragon777"
-__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput"]
+__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder"]
 
 import platform
 import sys
@@ -10,6 +10,16 @@ from contextlib import contextmanager
 from typing import Callable, Optional
 import difflib
 from enum import Enum
+import threading
+import io
+from datetime import datetime
+import builtins
+import re
+
+ANSI_ESCAPE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+
+def _strip_ansi(text: str) -> str:
+    return ANSI_ESCAPE.sub("", text)
 
 class ColorSystem:
     def __init__(self):
@@ -119,7 +129,6 @@ def _format_duration(seconds: float, precision: int = 3) -> str:
             
 @contextmanager
 def spinner(label: str = "Loading", frames="⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏", done_msg: str = "Done"):
-    import threading
     colors = ColorSystem()
     stop_event = threading.Event()
 
@@ -297,6 +306,102 @@ def userinput(
                 continue
         
         return value
+
+class _RecorderStream(io.TextIOBase):
+    def __init__(self, original_stream, log_file, stream_name, colors):
+        self._original = original_stream
+        self._log_file = log_file
+        self._stream_name = stream_name
+        self._colors = colors
+        self._buffer = ""
+
+    def write(self, text: str) -> int:
+        if text:
+            self._original.write(text)
+            self._original.flush()
+            self._buffer += text
+            if text.endswith("\n"):
+                self._flush_buffer()
+        return len(text)
+
+    def _flush_buffer(self):
+        if self._buffer:
+            content = _strip_ansi(self._buffer.rstrip("\n"))
+            if content:
+                timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+                if self._stream_name == "input":
+                    line = f"[{timestamp}] [INPUT] {content}\n"
+                else:
+                    line = f"[{timestamp}] [OUTPUT] {content}\n"
+                self._log_file.write(line)
+                self._log_file.flush()
+            self._buffer = ""
+
+    def flush(self):
+        self._original.flush()
+        self._flush_buffer()
+
+    def readline(self, size=-1):
+        if self._stream_name == "input":
+            line = self._original.readline(size)
+            self._buffer += line
+            if line.endswith("\n"):
+                self._flush_buffer()
+            return line
+        return ""
+
+    def isatty(self):
+        return self._original.isatty()
+
+
+@contextmanager
+def recorder(
+    log_file: str = "session.log",
+    timestamp_format: str = "%Y-%m-%d %H:%M:%S",
+    include_header: bool = True,
+):
+    colors = ColorSystem()
+    log_path = log_file
+
+    with open(log_path, "w", encoding="utf-8") as f:
+        if include_header:
+            start_time = datetime.now().strftime(timestamp_format)
+            header = f"=== CLI Session Started: {start_time} ===\n"
+            f.write(header)
+            f.flush()
+
+        input_wrapper = _RecorderStream(sys.stdin, f, "input", colors)
+        output_wrapper = _RecorderStream(sys.stdout, f, "output", colors)
+
+        old_stdin = sys.stdin
+        old_stdout = sys.stdout
+        old_input = builtins.input
+
+        sys.stdin = input_wrapper
+        sys.stdout = output_wrapper
+
+        def recorded_input(prompt=""):
+            if prompt:
+                output_wrapper.write(prompt)
+            return old_input()
+
+        builtins.input = recorded_input
+
+        try:
+            yield
+        finally:
+            output_wrapper._flush_buffer()
+            input_wrapper._flush_buffer()
+            
+            sys.stdin = old_stdin
+            sys.stdout = old_stdout
+            builtins.input = old_input
+
+            end_time = datetime.now().strftime(timestamp_format)
+            footer = f"=== CLI Session Ended: {end_time} ===\n"
+            f.write(footer)
+            f.flush()
+
 
 if __name__ == "__main__":
     print(ColorSystem().info("Tooly v{}".format(__version__)))
