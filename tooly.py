@@ -1,12 +1,13 @@
 __version__ = "1.1.0"
 __author__ = "SuperDragon777"
-__all__ = ["ColorSystem"]
+__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput"]
 
 import platform
 import sys
 import os
 import time
 from contextlib import contextmanager
+from typing import Callable, Optional
 import difflib
 from enum import Enum
 
@@ -260,6 +261,42 @@ def _diff_line(a, b, label_a, label_b, context_lines, show_legend):
                     parts.append(colors.green("+" + line.rstrip("\n")) + "\n")
     return "".join(parts)
 
+def userinput(
+    prompt: str = "",
+    validator: Optional[Callable[[str], bool]] = None,
+    error_msg: str = "Invalid input. Please try again.",
+    max_attempts: Optional[int] = None,
+    strip: bool = True,
+) -> str:
+    colors = ColorSystem()
+    attempts = 0
+    
+    while True:
+        try:
+            value = input(colors.bold(prompt))
+        except (EOFError, KeyboardInterrupt):
+            print()
+            raise
+        
+        if strip:
+            value = value.strip()
+        
+        if validator is not None:
+            try:
+                if not validator(value):
+                    print(colors.error(error_msg))
+                    attempts += 1
+                    if max_attempts is not None and attempts >= max_attempts:
+                        raise ValueError(f"Max attempts ({max_attempts}) exceeded")
+                    continue
+            except Exception as e:
+                print(colors.error(str(e)))
+                attempts += 1
+                if max_attempts is not None and attempts >= max_attempts:
+                    raise
+                continue
+        
+        return value
 
 if __name__ == "__main__":
     print(ColorSystem().info("Tooly v{}".format(__version__)))
