@@ -1,6 +1,6 @@
 __version__ = "1.2.0"
 __author__ = "SuperDragon777"
-__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder"]
+__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls"]
 
 import platform
 import sys
@@ -402,6 +402,14 @@ def recorder(
             f.write(footer)
             f.flush()
 
+def cls():
+    sys.stdout.write("\033[2J\033[H")
+    sys.stdout.flush()
+
+    if platform.system() == "Windows":
+        os.system("cls")
+    else:
+        os.system("clear")
 
 if __name__ == "__main__":
     print(ColorSystem().info("Tooly v{}".format(__version__)))

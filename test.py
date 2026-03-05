@@ -81,3 +81,7 @@ with tooly.recorder("example_session.log"):
     print("Recorder example...")
     name = tooly.userinput("Enter your name: ", validator=lambda name: name.isalpha(), error_msg="Invalid name. Try again.")
     print(f"Hello, {name}!")
+
+#* Clear console example
+input("Press Enter to continue...")
+tooly.cls()
