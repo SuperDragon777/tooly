@@ -85,3 +85,15 @@ with tooly.recorder("example_session.log"):
 #* Clear console example
 input("Press Enter to continue...")
 tooly.cls()
+
+#* On platform example
+def win_print():
+    print("Windows")
+
+def linux_print():
+    print("Linux")
+
+def android_print():
+    print("Android")
+
+print(tooly.on_platform(windows=win_print, linux=linux_print, android=android_print))

@@ -1,13 +1,13 @@
 __version__ = "1.2.0"
 __author__ = "SuperDragon777"
-__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls"]
+__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform"]
 
 import platform
 import sys
 import os
 import time
 from contextlib import contextmanager
-from typing import Callable, Optional
+from typing import Callable, Optional, Any
 import difflib
 from enum import Enum
 import threading
@@ -410,6 +410,98 @@ def cls():
         os.system("cls")
     else:
         os.system("clear")
+class Platform(Enum):
+    WINDOWS = "windows"
+    LINUX = "linux"
+    MACOS = "macos"
+    ANDROID = "android"
+    IOS = "ios"
+    FREEBSD = "freebsd"
+    OTHER = "other"
+
+    @classmethod
+    def current(cls) -> "Platform":
+        system = platform.system().lower()
+        release = platform.release().lower()
+        
+        if system == "windows":
+            return cls.WINDOWS
+        elif system == "linux":
+            if "android" in release:
+                return cls.ANDROID
+            return cls.LINUX
+        elif system == "darwin":
+            if platform.machine().startswith("iPhone") or platform.machine().startswith("iPad"):
+                return cls.IOS
+            return cls.MACOS
+        elif "freebsd" in system:
+            return cls.FREEBSD
+        else:
+            return cls.OTHER
+
+
+class PlatformActions:
+    
+    def __init__(self):
+        self._actions: dict[Platform, Callable] = {}
+    
+    def register(self, platform: Platform, func: Callable) -> None:
+        self._actions[platform] = func
+    
+    def get(self, platform: Platform) -> Optional[Callable]:
+        return self._actions.get(platform)
+    
+    def execute(self, platform: Platform, *args, **kwargs) -> Any:
+        func = self.get(platform)
+        if func is None:
+            raise ValueError(f"No action registered for platform: {platform.value}")
+        return func(*args, **kwargs)
+
+
+def on_platform(
+    windows: Optional[Callable] = None,
+    linux: Optional[Callable] = None,
+    macos: Optional[Callable] = None,
+    android: Optional[Callable] = None,
+    ios: Optional[Callable] = None,
+    freebsd: Optional[Callable] = None,
+    other: Optional[Callable] = None,
+    default: Optional[Callable] = None,
+    *args,
+    **kwargs
+) -> Any:
+    current = Platform.current()
+    actions = PlatformActions()
+    
+    for plat, func in [
+        (Platform.WINDOWS, windows),
+        (Platform.LINUX, linux),
+        (Platform.MACOS, macos),
+        (Platform.ANDROID, android),
+        (Platform.IOS, ios),
+        (Platform.FREEBSD, freebsd),
+        (Platform.OTHER, other or default),
+    ]:
+        if func is not None:
+            actions.register(plat, func)
+    
+    try:
+        return actions.execute(current, *args, **kwargs)
+    except ValueError:
+        if default is not None:
+            return default(*args, **kwargs)
+        raise
+
+def get_platform_info() -> dict:
+    return {
+        "platform": Platform.current().value,
+        "system": platform.system(),
+        "release": platform.release(),
+        "version": platform.version(),
+        "machine": platform.machine(),
+        "processor": platform.processor(),
+    }
+
 
 if __name__ == "__main__":
     print(ColorSystem().info("Tooly v{}".format(__version__)))
