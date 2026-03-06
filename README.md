@@ -94,6 +94,21 @@ with tooly.recorder("example_session.log"):
     print("Recorder example...")
     name = tooly.userinput("Enter your name: ", validator=lambda name: name.isalpha(), error_msg="Invalid name. Try again.")
     print(f"Hello, {name}!")
+
+#* Clear console example
+input("Press Enter to continue...")
+tooly.cls()
+
+#* On platform example
+result = tooly.on_platform(
+    windows=lambda: "Windows",
+    linux=lambda: "Linux",
+    macos=lambda: "macOS",
+    android=lambda: "Android",
+    ios=lambda: "iOS",
+    default=lambda: "Unknown"
+)
+print(f"Current platform: {result}")
 ```
 
 ## License

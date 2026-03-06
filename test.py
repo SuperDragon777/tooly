@@ -87,13 +87,12 @@ input("Press Enter to continue...")
 tooly.cls()
 
 #* On platform example
-def win_print():
-    print("Windows")
-
-def linux_print():
-    print("Linux")
-
-def android_print():
-    print("Android")
-
-print(tooly.on_platform(windows=win_print, linux=linux_print, android=android_print))
+result = tooly.on_platform(
+    windows=lambda: "Windows",
+    linux=lambda: "Linux",
+    macos=lambda: "macOS",
+    android=lambda: "Android",
+    ios=lambda: "iOS",
+    default=lambda: "Unknown"
+)
+print(f"Current platform: {result}")
