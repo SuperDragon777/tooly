@@ -15,7 +15,8 @@ import tooly
 import time
 
 colors = tooly.ColorSystem() #? recommended
-wait_time = 0.5
+wait_time = 2
+skip_userinput = False
 
 print(colors.info("Welcome to Tooly!")) #* Color example
 
@@ -85,9 +86,9 @@ Methods:
     str.isprintable() - only printable characters
     str.isascii() -  only ASCII characters
 """
-
-tooly.userinput("Enter your name: ", validator=lambda name: name.isalpha(), error_msg="Invalid name. Try again.")
-tooly.userinput("Enter your age: ", validator=lambda name: name.isdigit(), error_msg="Invalid age. Try again.")
+if not skip_userinput:
+    tooly.userinput("Enter your name: ", validator=lambda name: name.isalpha(), error_msg="Invalid name. Try again.")
+    tooly.userinput("Enter your age: ", validator=lambda name: name.isdigit(), error_msg="Invalid age. Try again.")
 
 #* Recorder example
 with tooly.recorder("example_session.log"):
@@ -96,6 +97,7 @@ with tooly.recorder("example_session.log"):
     print(f"Hello, {name}!")
 
 #* Clear console example
+print("Console will be cleared")
 input("Press Enter to continue...")
 tooly.cls()
 
@@ -109,6 +111,14 @@ result = tooly.on_platform(
     default=lambda: "Unknown"
 )
 print(f"Current platform: {result}")
+input("Press Enter to continue...")
+
+#* Menu example
+choice = tooly.menu(
+    ["Start server", "Stop server", "Exit"],
+    title="Example menu"
+)
+print(f"You chose: {choice}")
 ```
 
 ## License

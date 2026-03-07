@@ -1,6 +1,6 @@
 __version__ = "1.2.0"
 __author__ = "SuperDragon777"
-__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform"]
+__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu"]
 
 import platform
 import sys
@@ -15,6 +15,18 @@ import io
 from datetime import datetime
 import builtins
 import re
+
+try:
+    import tty as _tty
+    import termios as _termios
+except ImportError:
+    _tty = None
+    _termios = None
+
+try:
+    import msvcrt as _msvcrt
+except ImportError:
+    _msvcrt = None
 
 ANSI_ESCAPE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
 
@@ -58,6 +70,17 @@ class ColorSystem:
     
     def bold(self, text):
         return self._colorize(text, "1")
+    
+    def dim(self, text):
+        return self._colorize(text, "2")
+    
+    def bg_blue(self, text):
+        return self._colorize(text, "44")
+    
+    def bg_color(self, text, bg_code: str, fg_code: str = "97"):
+        if not self.support_colors:
+            return text
+        return f"\033[{bg_code};{fg_code}m{text}\033[0m"
     
     def success(self, text):
         return self.green(f"[✓] {text}")
@@ -126,7 +149,7 @@ def _format_duration(seconds: float, precision: int = 3) -> str:
         minutes = int((seconds % 3600) // 60)
         secs = seconds % 60
         return f"{hours}h {minutes}m {secs:.{precision}f}s"
-            
+
 @contextmanager
 def spinner(label: str = "Loading", frames="⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏", done_msg: str = "Done"):
     colors = ColorSystem()
@@ -410,6 +433,7 @@ def cls():
         os.system("cls")
     else:
         os.system("clear")
+
 class Platform(Enum):
     WINDOWS = "windows"
     LINUX = "linux"
@@ -502,6 +526,91 @@ def get_platform_info() -> dict:
         "processor": platform.processor(),
     }
 
+def _read_key_unix() -> str:
+    fd = sys.stdin.fileno()
+    old = _termios.tcgetattr(fd)
+    try:
+        _tty.setraw(fd)
+        ch = sys.stdin.read(1)
+        if ch == "\x1b":
+            ch2 = sys.stdin.read(1)
+            if ch2 == "[":
+                ch3 = sys.stdin.read(1)
+                return f"\x1b[{ch3}"
+            return ch2
+        return ch
+    finally:
+        _termios.tcsetattr(fd, _termios.TCSADRAIN, old)
+
+
+def _read_key_windows() -> str:
+    ch = _msvcrt.getwch()
+    if ch in ("\x00", "\xe0"):
+        ch2 = _msvcrt.getwch()
+        return f"\x00{ch2}"
+    return ch
+
+
+def _read_key() -> str:
+    if platform.system() == "Windows":
+        return _read_key_windows()
+    return _read_key_unix()
+
+
+def menu(
+    items: list[str],
+    *,
+    title: str = "",
+    loop: bool = True,
+    show_hint: bool = True,
+) -> str | None:
+    if not items:
+        raise ValueError("menu() requires at least one item")
+
+    colors = ColorSystem()
+    idx = 0
+    n = len(items)
+
+    def _draw():
+        cls()
+        if title:
+            print(colors.bold(title))
+        for i, item in enumerate(items):
+            if i == idx:
+                print(colors.blue("❯ ") + colors.bold(item))
+            else:
+                print("  " + item)
+        if show_hint:
+            print(colors.grey("\n  ↑↓ navigate  Enter confirm  Esc cancel"))
+
+    result = None
+    try:
+        while True:
+            _draw()
+            key = _read_key()
+            if key in ("\x1b[A", "\x00H"):
+                if idx > 0:
+                    idx -= 1
+                elif loop:
+                    idx = n - 1
+            elif key in ("\x1b[B", "\x00P"):
+                if idx < n - 1:
+                    idx += 1
+                elif loop:
+                    idx = 0
+            elif key in ("\r", "\n"):
+                result = items[idx]
+                break
+            elif key in ("\x03", "\x1b", "q"):
+                result = None
+                break
+    except KeyboardInterrupt:
+        result = None
+
+    cls()
+    return result
+
 
 if __name__ == "__main__":
+    cls()
     print(ColorSystem().info("Tooly v{}".format(__version__)))
