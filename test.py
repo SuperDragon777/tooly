@@ -120,3 +120,6 @@ def show_time():
     return f"Текущее время: {datetime.now().strftime("%H:%M:%S")}"
 
 tooly.watch(show_time, interval=1)
+
+#* Notify example
+tooly.notify("Example", "Example text")

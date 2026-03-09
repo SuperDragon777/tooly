@@ -1,6 +1,6 @@
-__version__ = "1.2.0"
+__version__ = "1.3.0"
 __author__ = "SuperDragon777"
-__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch"]
+__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify"]
 
 import platform
 import sys
@@ -15,6 +15,7 @@ import io
 from datetime import datetime
 import builtins
 import re
+import subprocess
 
 try:
     import tty as _tty
@@ -659,6 +660,46 @@ def watch(
             time.sleep(interval)
     except KeyboardInterrupt:
         cls()
+
+
+def notify(
+    title: str = "Notification",
+    message: str = "",
+    *,
+    urgency: str = "normal",
+) -> bool:
+    system = platform.system()
+    
+    if system == "Windows":
+        try:
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(0, message, title, 0x40)
+            return True
+        except Exception:
+            return False
+    
+    elif system == "Darwin":
+        try:
+            escaped_title = title.replace('"', '\\"').replace("'", "'\\''")
+            escaped_message = message.replace('"', '\\"').replace("'", "'\\''")
+            script = f'''
+            display notification "{escaped_message}" with title "{escaped_title}"
+            '''
+            subprocess.run(["osascript", "-e", script], check=True)
+            return True
+        except Exception:
+            return False
+    
+    else:
+        try:
+            subprocess.run(
+                ["notify-send", "-u", urgency, title, message],
+                check=True,
+                timeout=5
+            )
+            return True
+        except (subprocess.SubprocessError, FileNotFoundError):
+            return False
 
 
 if __name__ == "__main__":
