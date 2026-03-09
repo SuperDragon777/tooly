@@ -1,6 +1,6 @@
 __version__ = "1.2.0"
 __author__ = "SuperDragon777"
-__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm"]
+__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch"]
 
 import platform
 import sys
@@ -632,6 +632,33 @@ def confirm(
         if key in no_values:
             return False
         print(colors.error("Invalid input. Press y (yes) or n (no)."))
+
+
+def watch(
+    func: Callable[[], str],
+    interval: float = 2.0,
+    *,
+    title: str = "watch",
+    show_timestamp: bool = True,
+) -> None:
+    colors = ColorSystem()
+    try:
+        while True:
+            cls()
+            header = colors.bold(f"{title}")
+            if show_timestamp:
+                header += colors.grey(f"  -  {datetime.now().strftime('%H:%M:%S')}")
+            print(header)
+            print(colors.grey("─" * 40))
+            try:
+                output = func()
+                print(output)
+            except Exception as e:
+                print(colors.error(str(e)))
+            print(colors.grey(f"\nRefresh every {interval}s. Press Ctrl+C to exit."))
+            time.sleep(interval)
+    except KeyboardInterrupt:
+        cls()
 
 
 if __name__ == "__main__":

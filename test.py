@@ -1,5 +1,6 @@
 import tooly
 import time
+from datetime import datetime
 
 colors = tooly.ColorSystem() #? recommended
 wait_time = 2
@@ -112,3 +113,10 @@ if tooly.confirm("Are you sure?"):
     print("Confirmed")
 else:
     print("Canceled")
+input("Press Enter to continue...")
+
+#* Watch example
+def show_time():
+    return f"Текущее время: {datetime.now().strftime("%H:%M:%S")}"
+
+tooly.watch(show_time, interval=1)
