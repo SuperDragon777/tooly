@@ -106,3 +106,9 @@ choice = tooly.menu(
     title="Example menu"
 )
 print(f"You chose: {choice}")
+
+#* Confirm example
+if tooly.confirm("Are you sure?"):
+    print("Confirmed")
+else:
+    print("Canceled")

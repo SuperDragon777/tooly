@@ -1,6 +1,6 @@
 __version__ = "1.2.0"
 __author__ = "SuperDragon777"
-__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu"]
+__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm"]
 
 import platform
 import sys
@@ -609,6 +609,29 @@ def menu(
 
     cls()
     return result
+
+
+def confirm(
+    prompt: str = "Continue?",
+    yes_values: list[str] | None = None,
+    no_values: list[str] | None = None,
+) -> bool:
+    if yes_values is None:
+        yes_values = ["y", "д"]
+    if no_values is None:
+        no_values = ["n", "н"]
+    colors = ColorSystem()
+    while True:
+        sys.stdout.write(colors.bold(f"{prompt} (y/n): "))
+        sys.stdout.flush()
+        key = _read_key().lower()
+        sys.stdout.write(key + "\n")
+        sys.stdout.flush()
+        if key in yes_values:
+            return True
+        if key in no_values:
+            return False
+        print(colors.error("Invalid input. Press y (yes) or n (no)."))
 
 
 if __name__ == "__main__":
