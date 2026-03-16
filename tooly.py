@@ -1,6 +1,6 @@
 __version__ = "1.3.0"
 __author__ = "SuperDragon777"
-__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify"]
+__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry"]
 
 import platform
 import sys
@@ -16,6 +16,7 @@ from datetime import datetime
 import builtins
 import re
 import subprocess
+import functools
 
 try:
     import tty as _tty
@@ -701,6 +702,149 @@ def notify(
         except (subprocess.SubprocessError, FileNotFoundError):
             return False
 
+class _Logger:
+    _LEVELS = {
+        "debug":   ("DBG", "grey",   False),
+        "info":    ("INF", "blue",   False),
+        "success": ("OK ", "green",  False),
+        "warn":    ("WRN", "yellow", False),
+        "error":   ("ERR", "red",    True),
+    }
+
+    def __init__(self):
+        self._colors  = ColorSystem()
+        self._muted   = False
+        self._file    = None
+        self._show_ts = True
+
+    def mute(self):   self._muted = True
+    def unmute(self): self._muted = False
+
+    def timestamps(self, enabled: bool = True):
+        self._show_ts = enabled
+
+    def set_file(self, path: str):
+        self._file = open(path, "a", encoding="utf-8")
+
+    def unset_file(self):
+        if self._file:
+            self._file.close()
+            self._file = None
+
+    def __call__(self, tag: str, *args, color: str = "blue", indent: int = 0, stderr: bool = False):
+        if self._muted:
+            return
+        msg    = " ".join(str(a) for a in args)
+        ts     = self._colors.grey(datetime.now().strftime("%H:%M:%S") + " ") if self._show_ts else ""
+        pad    = "  " * indent
+        label  = getattr(self._colors, color, self._colors.blue)(f"[{tag}]")
+        line   = f"{ts}{pad}{label} {msg}"
+        stream = sys.stderr if stderr else sys.stdout
+        stream.write(line + "\n")
+        stream.flush()
+        if self._file:
+            self._file.write(_strip_ansi(line) + "\n")
+            self._file.flush()
+
+    def _emit(self, level: str, *args, indent: int = 0):
+        tag, color, use_stderr = self._LEVELS[level]
+        self(tag, *args, color=color, indent=indent, stderr=use_stderr)
+
+    def debug(self,   *args, indent: int = 0): self._emit("debug",   *args, indent=indent)
+    def info(self,    *args, indent: int = 0): self._emit("info",    *args, indent=indent)
+    def success(self, *args, indent: int = 0): self._emit("success", *args, indent=indent)
+    def warn(self,    *args, indent: int = 0): self._emit("warn",    *args, indent=indent)
+    def error(self,   *args, indent: int = 0): self._emit("error",   *args, indent=indent)
+
+
+log = _Logger()
+
+
+class _RetryCtx:
+    def __init__(
+        self,
+        attempts:   int,
+        delay:      float,
+        backoff:    float,
+        exceptions: tuple,
+        on_fail:    str,
+        label:      Optional[str],
+    ):
+        self.attempt: int             = 0
+        self.failed:  list[Exception] = []
+        self._done:   bool            = False
+        self._wait:   float           = delay
+        self._attempts   = attempts
+        self._exceptions = exceptions
+        self._on_fail    = on_fail
+        self._label      = label
+        self._backoff    = backoff
+
+    def _report_failure(self, msg: str):
+        if self._on_fail == "warn":    log.warn(msg)
+        elif self._on_fail == "error": log.error(msg)
+
+    def _report_retry(self, attempt: int, exc: Exception, wait: float):
+        log("RTY",
+            f"attempt {attempt}/{self._attempts} failed ({type(exc).__name__}: {exc})"
+            + (f" — retrying in {wait:.1f}s" if wait > 0 else " — retrying"),
+            color="yellow")
+
+    def __enter__(self) -> "_RetryCtx":
+        if self.attempt == 0:
+            self.attempt = 1
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
+        if exc_type is None:
+            if self.failed:
+                log.success(f"succeeded on attempt {self.attempt}/{self._attempts}")
+            self._done = True
+            return False
+        if not issubclass(exc_type, self._exceptions):
+            return False
+        self.failed.append(exc_val)
+        if self.attempt >= self._attempts:
+            self._report_failure(f"all {self._attempts} attempt(s) failed — {exc_val}")
+            return False
+        self._report_retry(self.attempt, exc_val, self._wait)
+        time.sleep(self._wait)
+        self._wait   *= self._backoff
+        self.attempt += 1
+        return True
+
+    def __call__(self, func: Callable) -> Callable:
+        name = self._label or func.__name__
+
+        @functools.wraps(func)
+        def _wrapper(*args, **kwargs):
+            wait, failed = self._wait, []
+            for attempt in range(1, self._attempts + 1):
+                try:
+                    result = func(*args, **kwargs)
+                    if failed:
+                        log.success(f"{name}: ok on attempt {attempt}/{self._attempts}")
+                    return result
+                except self._exceptions as exc:
+                    failed.append(exc)
+                    if attempt == self._attempts:
+                        self._report_failure(f"{name}: all {self._attempts} attempt(s) failed — {exc}")
+                        raise
+                    self._report_retry(attempt, exc, wait)
+                    time.sleep(wait)
+                    wait *= self._backoff
+        return _wrapper
+
+
+def retry(
+    attempts:   int           = 3,
+    delay:      float         = 1.0,
+    backoff:    float         = 1.0,
+    exceptions: tuple         = (Exception,),
+    on_fail:    str           = "warn",
+    label:      Optional[str] = None,
+) -> _RetryCtx:
+    return _RetryCtx(attempts, delay, backoff, exceptions, on_fail, label)
 
 if __name__ == "__main__":
     cls()

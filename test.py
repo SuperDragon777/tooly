@@ -1,6 +1,7 @@
 import tooly
 import time
 from datetime import datetime
+import requests
 
 colors = tooly.ColorSystem() #? recommended
 wait_time = 2
@@ -123,3 +124,21 @@ tooly.watch(show_time, interval=1)
 
 #* Notify example
 tooly.notify("Example", "Example text")
+
+#* Log example
+tooly.log.set_file("example.log")
+tooly.log.success("Example success log message")
+tooly.log.debug("Example debug log message")
+tooly.log.error("Example error log message")
+tooly.log.warn("Example warning log message")
+tooly.log.info("Example info log message")
+
+#* Retry example
+@tooly.retry(attempts=4, delay=0.5, backoff=2.0)
+def fetch():
+    requests.get("https://httpbin.org/status/500").raise_for_status() #? This will fail with 500 status code, triggering retries
+
+try:
+    fetch()
+except requests.exceptions.HTTPError as e:
+    tooly.log.error("Giving up:", e)
