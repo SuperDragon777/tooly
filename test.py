@@ -145,3 +145,7 @@ except requests.exceptions.HTTPError as e:
 
 #* Countdown example
 tooly.countdown(5) #? very simple to use, don't you?
+
+#* Sparkline example
+data = [1, 5, 3, 8, 2]
+print(tooly.sparkline(data))

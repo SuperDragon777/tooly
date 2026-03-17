@@ -1,6 +1,6 @@
 __version__ = "1.3.0"
 __author__ = "SuperDragon777"
-__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown"]
+__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline"]
 
 import platform
 import sys
@@ -871,6 +871,37 @@ def countdown(
         sys.stdout.write(colors.warning("Cancelled") + "\n")
         sys.stdout.flush()
         return False
+
+
+def sparkline(
+    values: list[float | int],
+    *,
+    min_val: Optional[float] = None,
+    max_val: Optional[float] = None
+) -> str:
+    if not values:
+        return ""
+
+    bars = "▁▂▃▄▅▆▇█"
+    n_bars = len(bars)
+
+    if min_val is None:
+        min_val = min(values)
+    if max_val is None:
+        max_val = max(values)
+
+    range_val = max_val - min_val
+
+    if range_val == 0:
+        return bars[-1] * len(values)
+
+    result = []
+    for v in values:
+        idx = int((v - min_val) / range_val * (n_bars - 1))
+        idx = max(0, min(n_bars - 1, idx))
+        result.append(bars[idx])
+
+    return "".join(result)
 
 
 if __name__ == "__main__":
