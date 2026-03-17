@@ -1,6 +1,6 @@
 __version__ = "1.3.0"
 __author__ = "SuperDragon777"
-__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline"]
+__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar"]
 
 import platform
 import sys
@@ -12,11 +12,12 @@ import difflib
 from enum import Enum
 import threading
 import io
-from datetime import datetime
+from datetime import datetime, timedelta
 import builtins
 import re
 import subprocess
 import functools
+import random
 
 try:
     import tty as _tty
@@ -902,6 +903,174 @@ def sparkline(
         result.append(bars[idx])
 
     return "".join(result)
+
+
+def calendar(
+    data: Optional[dict[str, int]] = None,
+    *,
+    title: str = "",
+    color_mode: str = "green",
+    show_legend: bool = True,
+    show_stats: bool = True,
+    max_weeks: int = 20,
+) -> None:
+    colors = ColorSystem()
+
+    palettes = {
+        "green": ["90", "22", "23", "24", "28"],
+        "blue": ["90", "24", "25", "26", "27"],
+        "purple": ["90", "53", "54", "55", "56"],
+        "orange": ["90", "208", "209", "210", "214"],
+    }
+
+    palette = palettes.get(color_mode, palettes["green"])
+
+    if data is None:
+        data = {}
+        today = datetime.now().date()
+        for i in range(365):
+            date = today - timedelta(days=i)
+            data[date.isoformat()] = random.choices(
+                [0, 1, 2, 3, 4], weights=[50, 20, 15, 10, 5]
+            )[0]
+
+    today = datetime.now().date()
+    days_to_show = max_weeks * 7
+    start_date = today - timedelta(days=days_to_show - 1)
+
+    weeks = []
+    current_week = []
+
+    first_weekday = start_date.weekday()
+    for _ in range(first_weekday):
+        current_week.append(None)
+
+    for i in range(days_to_show):
+        date = start_date + timedelta(days=i)
+        count = data.get(date.isoformat(), 0)
+        current_week.append(count)
+
+        if len(current_week) == 7:
+            weeks.append(current_week)
+            current_week = []
+
+    if current_week:
+        while len(current_week) < 7:
+            current_week.append(None)
+        weeks.append(current_week)
+
+    if title:
+        print(colors.bold(title))
+        print()
+
+    month_positions = {}
+    current_month = -1
+    for i in range(days_to_show):
+        date = start_date + timedelta(days=i)
+        if date.month != current_month:
+            week_idx = (i + first_weekday) // 7
+            if week_idx not in month_positions and week_idx < len(weeks):
+                month_positions[week_idx] = date.strftime("%b")
+            current_month = date.month
+
+    print("  ", end="")
+    for week_idx in range(len(weeks)):
+        if week_idx in month_positions:
+            print(colors.grey(month_positions[week_idx]), end=" ")
+        else:
+            print("  ", end=" ")
+    print()
+
+    for row in range(7):
+        if row == 0:
+            print(colors.grey("Mon"), end=" ")
+        elif row == 2:
+            print(colors.grey("Wed"), end=" ")
+        elif row == 4:
+            print(colors.grey("Fri"), end=" ")
+        else:
+            print("   ", end="")
+
+        for week in weeks:
+            count = week[row] if row < len(week) else None
+            if count is None:
+                print("  ", end=" ")
+            else:
+                level = min(4, count) if count > 0 else 0
+                fg_code = palette[level]
+                
+                if level == 0:
+                    cell = colors.grey("░░")
+                elif level == 1:
+                    cell = colors._colorize("▒▒", fg_code)
+                elif level == 2:
+                    cell = colors._colorize("▓▓", fg_code)
+                else:
+                    cell = colors._colorize("██", fg_code)
+                print(cell, end=" ")
+        print()
+
+    if show_legend or show_stats:
+        print()
+
+    if show_legend:
+        print(colors.grey("  Less "), end="")
+        for i in range(5):
+            fg_code = palette[i]
+            if i == 0:
+                cell = colors.grey("░░")
+            elif i == 1:
+                cell = colors._colorize("▒▒", fg_code)
+            elif i == 2:
+                cell = colors._colorize("▓▓", fg_code)
+            else:
+                cell = colors._colorize("██", fg_code)
+            print(cell, end="")
+        print(colors.grey(" More"))
+
+    if show_stats:
+        displayed_dates = set()
+        for i in range(days_to_show):
+            date = start_date + timedelta(days=i)
+            displayed_dates.add(date.isoformat())
+        
+        total = sum(v for k, v in data.items() if k in displayed_dates and v is not None)
+        active_days = sum(1 for k, v in data.items() if k in displayed_dates and v and v > 0)
+        max_streak = _calc_max_streak({k: v for k, v in data.items() if k in displayed_dates})
+        print(colors.grey(f"  Total: {total} | Active days: {active_days} | Max streak: {max_streak} days"))
+
+
+def _calc_max_streak(data: dict[str, int]) -> int:
+
+    if not data:
+        return 0
+
+    dates = sorted(data.keys())
+    max_streak = 0
+    current_streak = 0
+    prev_date = None
+
+    for date_str in dates:
+        if data.get(date_str, 0) == 0:
+            if prev_date is not None:
+                max_streak = max(max_streak, current_streak)
+                current_streak = 0
+            prev_date = None
+            continue
+
+        current_date = datetime.fromisoformat(date_str).date()
+        if prev_date is None:
+            current_streak = 1
+        elif (current_date - prev_date).days == 1:
+            current_streak += 1
+        else:
+            max_streak = max(max_streak, current_streak)
+            current_streak = 1
+
+        prev_date = current_date
+        max_streak = max(max_streak, current_streak)
+
+    return max_streak
 
 
 if __name__ == "__main__":

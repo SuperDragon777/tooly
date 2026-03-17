@@ -149,3 +149,7 @@ tooly.countdown(5) #? very simple to use, don't you?
 #* Sparkline example
 data = [1, 5, 3, 8, 2]
 print(tooly.sparkline(data))
+
+#* Calendar example
+data = {"2026-03-17": 5, "2026-03-16": 3, "2026-03-15": 1, "2026-03-14": 2, "2026-03-13": 7, "2026-03-12": 0, "2026-03-11": 6}
+tooly.calendar(data=data, title="Commits", color_mode="green", show_legend=True, show_stats=True)
