@@ -142,3 +142,6 @@ try:
     fetch()
 except requests.exceptions.HTTPError as e:
     tooly.log.error("Giving up:", e)
+
+#* Countdown example
+tooly.countdown(5) #? very simple to use, don't you?

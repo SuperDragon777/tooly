@@ -1,6 +1,6 @@
 __version__ = "1.3.0"
 __author__ = "SuperDragon777"
-__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry"]
+__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown"]
 
 import platform
 import sys
@@ -845,6 +845,33 @@ def retry(
     label:      Optional[str] = None,
 ) -> _RetryCtx:
     return _RetryCtx(attempts, delay, backoff, exceptions, on_fail, label)
+
+
+def countdown(
+    seconds: int,
+    *,
+    label: str = "Starting in",
+    done_msg: str = "Done!",
+) -> bool:
+    colors = ColorSystem()
+    try:
+        for remaining in range(seconds, -1, -1):
+            mins, secs = divmod(remaining, 60)
+            time_str = f"{mins:02d}:{secs:02d}"
+            sys.stdout.write(f"\r{label} {time_str}...")
+            sys.stdout.flush()
+            if remaining > 0:
+                time.sleep(1)
+        sys.stdout.write("\r" + " " * (len(label) + 12) + "\r")
+        sys.stdout.write(colors.success(done_msg) + "\n")
+        sys.stdout.flush()
+        return True
+    except KeyboardInterrupt:
+        sys.stdout.write("\r" + " " * (len(label) + 12) + "\r")
+        sys.stdout.write(colors.warning("Cancelled") + "\n")
+        sys.stdout.flush()
+        return False
+
 
 if __name__ == "__main__":
     cls()
