@@ -571,9 +571,12 @@ def menu(
     title: str = "",
     loop: bool = True,
     show_hint: bool = True,
+    input_mode: str = "arrows",
 ) -> str | None:
     if not items:
         raise ValueError("menu() requires at least one item")
+    if input_mode not in ("arrows", "digits"):
+        raise ValueError("input_mode must be 'arrows' or 'digits'")
 
     colors = ColorSystem()
     idx = 0
@@ -583,35 +586,79 @@ def menu(
         cls()
         if title:
             print(colors.bold(title))
+        pad_width = len(str(n))
         for i, item in enumerate(items):
-            if i == idx:
-                print(colors.blue("❯ ") + colors.bold(item))
+            if input_mode == "digits":
+                prefix = f"{i + 1:>{pad_width}}. "
+                if i == idx:
+                    print(prefix + colors.blue(colors.bold(item)))
+                else:
+                    print(prefix + item)
             else:
-                print("  " + item)
+                if i == idx:
+                    print(colors.blue("❯ ") + colors.bold(item))
+                else:
+                    print("  " + item)
         if show_hint:
-            print(colors.grey("\n  ↑↓ navigate  Enter confirm  Esc cancel"))
+            if input_mode == "digits":
+                print(colors.grey(f"\n  1-{n} select  Enter confirm  Esc cancel"))
+            else:
+                print(colors.grey("\n  ↑↓ navigate  Enter confirm  Esc cancel"))
 
     result = None
+    input_buffer = ""
     try:
         while True:
             _draw()
             key = _read_key()
-            if key in ("\x1b[A", "\x00H"):
-                if idx > 0:
-                    idx -= 1
-                elif loop:
-                    idx = n - 1
-            elif key in ("\x1b[B", "\x00P"):
-                if idx < n - 1:
-                    idx += 1
-                elif loop:
-                    idx = 0
-            elif key in ("\r", "\n"):
-                result = items[idx]
-                break
-            elif key in ("\x03", "\x1b", "q"):
-                result = None
-                break
+            
+            if input_mode == "digits":
+                if key.isdigit():
+                    input_buffer += key
+                    current_num = int(input_buffer)
+                    if 1 <= current_num <= n:
+                        idx = current_num - 1
+                        result = items[idx]
+                        break
+                    else:
+                        input_buffer = ""
+                elif key in ("\x1b[A", "\x00H"):
+                    if idx > 0:
+                        idx -= 1
+                    elif loop:
+                        idx = n - 1
+                    input_buffer = ""
+                elif key in ("\x1b[B", "\x00P"):
+                    if idx < n - 1:
+                        idx += 1
+                    elif loop:
+                        idx = 0
+                    input_buffer = ""
+                elif key in ("\r", "\n"):
+                    result = items[idx]
+                    break
+                elif key in ("\x03", "\x1b", "q"):
+                    result = None
+                    break
+                else:
+                    input_buffer = ""
+            else:
+                if key in ("\x1b[A", "\x00H"):
+                    if idx > 0:
+                        idx -= 1
+                    elif loop:
+                        idx = n - 1
+                elif key in ("\x1b[B", "\x00P"):
+                    if idx < n - 1:
+                        idx += 1
+                    elif loop:
+                        idx = 0
+                elif key in ("\r", "\n"):
+                    result = items[idx]
+                    break
+                elif key in ("\x03", "\x1b", "q"):
+                    result = None
+                    break
     except KeyboardInterrupt:
         result = None
 

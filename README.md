@@ -118,7 +118,8 @@ input("Press Enter to continue...")
 #* Menu example
 choice = tooly.menu(
     ["Start server", "Stop server", "Exit"],
-    title="Example menu"
+    title="Example menu",
+    input_mode="arrows" # if you cant use keyboard use digits
 )
 print(f"You chose: {choice}")
 
