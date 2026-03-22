@@ -7,7 +7,7 @@ import sys
 import os
 import time
 from contextlib import contextmanager
-from typing import Callable, Optional, Any, Iterable, TypeVar, Iterator
+from typing import Callable, Optional, Any, Iterable, TypeVar, Iterator, Union
 import difflib
 from enum import Enum
 import threading
@@ -1263,10 +1263,12 @@ def progress(
     total: Optional[int] = None,
     label: str = "Progress",
     width: int = 30,
-) -> _ProgressIterator | _ProgressManual:
+) -> Union[_ProgressIterator, _ProgressManual]:
     if iterable is not None:
         return _ProgressIterator(iterable, total=total, label=label, width=width)
     else:
+        if total is None:
+            raise ValueError("progress() requires either 'iterable' or 'total' argument")
         return _ProgressManual(total=total, label=label, width=width)
 
 
