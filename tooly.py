@@ -1,13 +1,13 @@
 __version__ = "1.3.0"
 __author__ = "SuperDragon777"
-__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar"]
+__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress"]
 
 import platform
 import sys
 import os
 import time
 from contextlib import contextmanager
-from typing import Callable, Optional, Any
+from typing import Callable, Optional, Any, Iterable, TypeVar, Iterator
 import difflib
 from enum import Enum
 import threading
@@ -1085,6 +1085,189 @@ def _calc_max_streak(data: dict[str, int]) -> int:
         max_streak = max(max_streak, current_streak)
 
     return max_streak
+
+
+T = TypeVar("T")
+
+
+class _ProgressIterator:
+
+    def __init__(
+        self,
+        iterable: Iterable[T],
+        total: Optional[int] = None,
+        label: str = "Progress",
+        width: int = 30,
+    ):
+        self._iterable = iterable
+        self._total = total
+        self._label = label
+        self._width = width
+        self._index = 0
+        self._iterator: Optional[Iterator[T]] = None
+        self._started = False
+
+    def __iter__(self) -> "_ProgressIterator":
+        self._iterator = iter(self._iterable)
+        if self._total is None:
+            try:
+                self._total = len(self._iterable)
+            except TypeError:
+                pass
+        self._started = True
+        return self
+
+    def __enter__(self) -> "_ProgressIterator":
+        self._started = True
+        if self._total is None:
+            try:
+                self._total = len(self._iterable)
+            except TypeError:
+                pass
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        self._finish()
+
+    def __next__(self) -> T:
+        if self._iterator is None:
+            self._iterator = iter(self._iterable)
+            if self._total is None:
+                try:
+                    self._total = len(self._iterable)
+                except TypeError:
+                    pass
+            self._started = True
+
+        try:
+            item = next(self._iterator)
+            self._index += 1
+            self._render()
+            return item
+        except StopIteration:
+            self._finish()
+            raise
+
+    def update(self, n: int = 1) -> None:
+        self._index += n
+        self._render()
+
+    def set(self, n: int) -> None:
+        self._index = n
+        self._render()
+
+    def _render(self):
+        if not self._started:
+            return
+        if self._total is None or self._total == 0:
+            percent = 0
+            bar = " " * self._width
+        else:
+            percent = self._index / self._total
+            filled = max(1, int(self._width * percent)) if percent > 0 else 0
+            bar = "█" * filled + "░" * (self._width - filled)
+
+        if self._total:
+            info = f"{self._index}/{self._total}"
+        else:
+            info = str(self._index)
+
+        line = f"{self._label}: |{bar}| {percent*100:5.1f}% ({info})"
+        if sys.stdout.isatty():
+            sys.stdout.write("\r" + line + "\033[K")
+        else:
+            sys.stdout.write(line + "\n")
+        sys.stdout.flush()
+
+    def _finish(self):
+        if sys.stdout.isatty():
+            sys.stdout.write("\n")
+            sys.stdout.flush()
+
+
+class _ProgressManual:
+
+    def __init__(
+        self,
+        total: int,
+        label: str = "Progress",
+        width: int = 30,
+    ):
+        self._total = total
+        self._label = label
+        self._width = width
+        self._index = 0
+
+    def __iter__(self) -> "_ProgressManual":
+        return self
+
+    def __next__(self) -> int:
+        if self._index >= self._total:
+            self.close()
+            raise StopIteration
+        self._index += 1
+        self._render()
+        return self._index - 1
+
+    def __enter__(self) -> "_ProgressManual":
+        self._render()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        self.close()
+
+    def update(self, n: int = 1) -> None:
+        self._index += n
+        if self._index > self._total:
+            self._index = self._total
+        self._render()
+
+    def set(self, n: int) -> None:
+        self._index = n
+        if self._index > self._total:
+            self._index = self._total
+        self._render()
+
+    def _render(self):
+        if self._total == 0:
+            percent = 0
+            bar = " " * self._width
+            info = "0/0"
+        else:
+            percent = self._index / self._total
+            filled = max(1, int(self._width * percent)) if percent > 0 else 0
+            bar = "█" * filled + "░" * (self._width - filled)
+            info = f"{self._index}/{self._total}"
+
+        line = f"{self._label}: |{bar}| {percent*100:5.1f}% ({info})"
+        if sys.stdout.isatty():
+            sys.stdout.write("\r" + line + "\033[K")
+        else:
+            sys.stdout.write(line + "\n")
+        sys.stdout.flush()
+
+    def close(self) -> None:
+        if sys.stdout.isatty():
+            sys.stdout.write("\n")
+            sys.stdout.flush()
+
+    def __enter__(self) -> "_ProgressManual":
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        self.close()
+
+
+def progress(
+    iterable: Optional[Iterable[T]] = None,
+    total: Optional[int] = None,
+    label: str = "Progress",
+    width: int = 30,
+) -> _ProgressIterator | _ProgressManual:
+    if iterable is not None:
+        return _ProgressIterator(iterable, total=total, label=label, width=width)
+    else:
+        return _ProgressManual(total=total, label=label, width=width)
 
 
 if __name__ == "__main__":

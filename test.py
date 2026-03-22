@@ -151,5 +151,29 @@ data = [1, 5, 3, 8, 2]
 print(tooly.sparkline(data))
 
 #* Calendar example
-data = {"2026-03-17": 5, "2026-03-16": 3, "2026-03-15": 1, "2026-03-14": 2, "2026-03-13": 7, "2026-03-12": 0, "2026-03-11": 6}
-tooly.calendar(data=data, title="Commits", color_mode="green", show_legend=True, show_stats=True)
+# data format: {"YYYY-MM-DD": count}  -  0 = no activity, 1–4+ = intensity levels
+
+#? Using with data example
+#? data = {"2026-03-17": 5, "2026-03-16": 3, "2026-03-15": 1, "2026-03-14": 2, "2026-03-13": 7, "2026-03-12": 0, "2026-03-11": 6}
+#? tooly.calendar(data=data, title="Commits", color_mode="green", show_legend=True, show_stats=True)
+
+tooly.calendar(title="Commits", color_mode="green", show_legend=True, show_stats=True)
+
+#* Progress example
+items = range(100) # for example
+
+# 1. automatic iteration
+for item in tooly.progress(items, label="Processing"):
+    time.sleep(0.03)
+
+# 2. manual update with iterable
+with tooly.progress(items, label="Processing") as pbar:
+    for item in items:
+        time.sleep(0.03)
+        pbar.update() # or pbar.set(i)
+
+# 3. manual update with total
+with tooly.progress(total=100, label="Processing") as pbar:
+    for i in range(100):
+        time.sleep(0.03)
+        pbar.update() # or pbar.set(i)
