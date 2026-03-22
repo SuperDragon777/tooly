@@ -1251,12 +1251,6 @@ class _ProgressManual:
             sys.stdout.write("\n")
             sys.stdout.flush()
 
-    def __enter__(self) -> "_ProgressManual":
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        self.close()
-
 
 def progress(
     iterable: Optional[Iterable[T]] = None,
