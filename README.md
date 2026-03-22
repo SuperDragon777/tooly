@@ -194,6 +194,20 @@ with tooly.progress(total=100, label="Processing") as pbar:
 
 #* Banner example
 tooly.banner("Tooly", style="block", color="blue", align="center", width=50)
+
+#* Password example
+
+#? if you want sudo-like password input
+#? pwd = tooly.password("Password: ", mask="")
+
+pwd = tooly.password(
+    "Password: ",
+    confirm=True,
+    min_length=8,
+    validator=lambda p: any(c.isdigit() for c in p),
+    error_msg="Password must contain at least one digit.",
+)
+print(f"You entered: {pwd}")
 ```
 
 ## License

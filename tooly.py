@@ -1,6 +1,6 @@
 __version__ = "1.4.0"
 __author__ = "SuperDragon777"
-__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner"]
+__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner", "password"]
 
 import platform
 import sys
@@ -1359,6 +1359,124 @@ def banner(
     sys.stdout.write(colorize(empty) + "\n")
     sys.stdout.write(colorize(bottom) + "\n")
     sys.stdout.flush()
+
+def password(
+    prompt: str = "Password: ",
+    *,
+    confirm: bool = False,
+    confirm_prompt: str = "Confirm password: ",
+    min_length: int = 0,
+    max_length: Optional[int] = None,
+    validator: Optional[Callable[[str], bool]] = None,
+    error_msg: str = "Invalid password. Try again.",
+    mask: str = "*",
+) -> str:
+    colors = ColorSystem()
+
+    def _read_masked(display_prompt: str) -> str:
+        sys.stdout.write(colors.bold(display_prompt))
+        sys.stdout.flush()
+
+        if platform.system() == "Windows" or _msvcrt is not None:
+            chars: list[str] = []
+            while True:
+                ch = _msvcrt.getwch()
+                if ch in ("\r", "\n"):
+                    sys.stdout.write("\n")
+                    sys.stdout.flush()
+                    break
+                elif ch in ("\x03",):
+                    sys.stdout.write("\n")
+                    sys.stdout.flush()
+                    raise KeyboardInterrupt
+                elif ch in ("\x08", "\x7f"):
+                    if chars:
+                        chars.pop()
+                        if mask:
+                            sys.stdout.write("\b \b")
+                            sys.stdout.flush()
+                elif ch == "\x00" or ch == "\xe0":
+                    _msvcrt.getwch()
+                else:
+                    chars.append(ch)
+                    if mask:
+                        sys.stdout.write(mask)
+                        sys.stdout.flush()
+            return "".join(chars)
+
+        if _tty is None or _termios is None:
+            import getpass as _getpass
+            return _getpass.getpass("")
+
+        fd = sys.stdin.fileno()
+        old = _termios.tcgetattr(fd)
+        chars: list[str] = []
+        try:
+            _tty.setraw(fd)
+            while True:
+                ch = sys.stdin.read(1)
+                if ch in ("\r", "\n"):
+                    sys.stdout.write("\n")
+                    sys.stdout.flush()
+                    break
+                elif ch == "\x03":
+                    sys.stdout.write("\n")
+                    sys.stdout.flush()
+                    raise KeyboardInterrupt
+                elif ch == "\x1b":
+                    sys.stdin.read(2)
+                elif ch in ("\x08", "\x7f"):
+                    if chars:
+                        chars.pop()
+                        if mask:
+                            sys.stdout.write("\b \b")
+                            sys.stdout.flush()
+                else:
+                    chars.append(ch)
+                    if mask:
+                        sys.stdout.write(mask)
+                        sys.stdout.flush()
+        finally:
+            _termios.tcsetattr(fd, _termios.TCSADRAIN, old)
+        return "".join(chars)
+
+    while True:
+        try:
+            value = _read_masked(prompt)
+        except (EOFError, KeyboardInterrupt):
+            print()
+            raise
+
+        if min_length and len(value) < min_length:
+            print(colors.error(f"Password must be at least {min_length} characters."))
+            continue
+
+        if max_length is not None and len(value) > max_length:
+            print(colors.error(f"Password must be at most {max_length} characters."))
+            continue
+
+        if validator is not None:
+            try:
+                if not validator(value):
+                    print(colors.error(error_msg))
+                    continue
+            except Exception as e:
+                print(colors.error(str(e)))
+                continue
+
+
+        if confirm:
+            try:
+                confirm_value = _read_masked(confirm_prompt)
+            except (EOFError, KeyboardInterrupt):
+                print()
+                raise
+
+            if value != confirm_value:
+                print(colors.error("Passwords do not match. Try again."))
+                continue
+
+        return value
 
 if __name__ == "__main__":
     cls()
