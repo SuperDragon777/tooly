@@ -109,6 +109,11 @@ class ColorSystem:
         prefix = "  " * level + "│ "
         return self._colorize(prefix, code) + text
 
+    def color256(self, text: str, code: str) -> str:
+        if not self.support_colors:
+            return text
+        return f"\033[38;5;{code}m{text}\033[0m"
+
 def typewrite(
     text: str,
     delay: float = 0.1,
@@ -917,10 +922,10 @@ def calendar(
     colors = ColorSystem()
 
     palettes = {
-        "green": ["90", "22", "23", "24", "28"],
-        "blue": ["90", "24", "25", "26", "27"],
-        "purple": ["90", "53", "54", "55", "56"],
-        "orange": ["90", "208", "209", "210", "214"],
+        "green":  ["90", "22", "28", "34", "40"],
+        "blue":   ["90", "17", "18", "20", "27"],
+        "purple": ["90", "53", "54", "55", "93"],
+        "orange": ["90", "130", "166", "202", "214"],
     }
 
     palette = palettes.get(color_mode, palettes["green"])
@@ -937,6 +942,10 @@ def calendar(
     today = datetime.now().date()
     days_to_show = max_weeks * 7
     start_date = today - timedelta(days=days_to_show - 1)
+
+    nonzero = [v for v in data.values() if v and v > 0]
+    _data_min = min(nonzero) if nonzero else 1
+    _data_max = max(nonzero) if nonzero else 1
 
     weeks = []
     current_week = []
@@ -996,17 +1005,22 @@ def calendar(
             if count is None:
                 print("  ", end=" ")
             else:
-                level = min(4, count) if count > 0 else 0
+                if count <= 0:
+                    level = 0
+                elif _data_max == _data_min:
+                    level = 4
+                else:
+                    level = 1 + round((count - _data_min) / (_data_max - _data_min) * 3)
                 fg_code = palette[level]
                 
                 if level == 0:
                     cell = colors.grey("░░")
                 elif level == 1:
-                    cell = colors._colorize("▒▒", fg_code)
+                    cell = colors.color256("▒▒", fg_code)
                 elif level == 2:
-                    cell = colors._colorize("▓▓", fg_code)
+                    cell = colors.color256("▓▓", fg_code)
                 else:
-                    cell = colors._colorize("██", fg_code)
+                    cell = colors.color256("██", fg_code)
                 print(cell, end=" ")
         print()
 
@@ -1020,11 +1034,11 @@ def calendar(
             if i == 0:
                 cell = colors.grey("░░")
             elif i == 1:
-                cell = colors._colorize("▒▒", fg_code)
+                cell = colors.color256("▒▒", fg_code)
             elif i == 2:
-                cell = colors._colorize("▓▓", fg_code)
+                cell = colors.color256("▓▓", fg_code)
             else:
-                cell = colors._colorize("██", fg_code)
+                cell = colors.color256("██", fg_code)
             print(cell, end="")
         print(colors.grey(" More"))
 
