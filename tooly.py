@@ -1,6 +1,6 @@
-__version__ = "1.3.0"
+__version__ = "1.4.0"
 __author__ = "SuperDragon777"
-__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress"]
+__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner"]
 
 import platform
 import sys
@@ -1265,6 +1265,53 @@ def progress(
             raise ValueError("progress() requires either 'iterable' or 'total' argument")
         return _ProgressManual(total=total, label=label, width=width)
 
+def banner(
+    text: str,
+    style: str = "block",
+    color: str = "blue",
+    align: str = "center",
+    width: Optional[int] = None,
+) -> None:
+    colors = ColorSystem()
+    colorize = getattr(colors, color, colors.blue)
+
+    lines = text.splitlines() if "\n" in text else [text]
+    max_len = max(len(l) for l in lines)
+    w = max(width or 0, max_len + 4)
+
+    def _align(s: str) -> str:
+        pad = w - 2 - len(s)
+        if align == "center":
+            l, r = pad // 2, pad - pad // 2
+            return " " * l + s + " " * r
+        elif align == "right":
+            return " " * pad + s
+        else:
+            return s + " " * pad
+
+    if style == "block":
+        tl, tr, bl, br, h, v = "╔", "╗", "╚", "╝", "═", "║"
+    elif style == "thin":
+        tl, tr, bl, br, h, v = "┌", "┐", "└", "┘", "─", "│"
+    elif style == "dots":
+        tl, tr, bl, br, h, v = "·", "·", "·", "·", "·", ":"
+    else:
+        for l in lines:
+            sys.stdout.write(colorize(colors.bold("  " + _align(l) + "  ")) + "\n")
+        sys.stdout.flush()
+        return
+
+    top    = tl + h * (w - 2) + tr
+    bottom = bl + h * (w - 2) + br
+    empty  = v + " " * (w - 2) + v
+
+    sys.stdout.write(colorize(top) + "\n")
+    sys.stdout.write(colorize(empty) + "\n")
+    for l in lines:
+        sys.stdout.write(colorize(v + _align(l) + v) + "\n")
+    sys.stdout.write(colorize(empty) + "\n")
+    sys.stdout.write(colorize(bottom) + "\n")
+    sys.stdout.flush()
 
 if __name__ == "__main__":
     cls()

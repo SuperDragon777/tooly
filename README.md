@@ -190,6 +190,9 @@ with tooly.progress(total=100, label="Processing") as pbar:
     for i in range(100):
         time.sleep(0.03)
         pbar.update() # or pbar.set(i)
+
+#* Banner example
+tooly.banner("Tooly", style="block", color="blue", align="center", width=50)
 ```
 
 ## License
