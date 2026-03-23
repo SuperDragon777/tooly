@@ -1,6 +1,6 @@
 __version__ = "1.4.0"
 __author__ = "SuperDragon777"
-__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner", "password"]
+__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner", "password", "env"]
 
 import platform
 import sys
@@ -1477,6 +1477,90 @@ def password(
                 continue
 
         return value
+
+def env(
+    name: str,
+    default: Optional[str] = None,
+    *,
+    required: bool = False,
+    dotenv: Optional[str] = None,
+) -> Optional[str]:
+    colors = ColorSystem()
+    
+    if dotenv is not None:
+        _load_dotenv(dotenv)
+    else:
+        _load_dotenv_auto()
+    
+    value = os.environ.get(name)
+    
+    if value is not None:
+        return value
+    
+    if required:
+        msg = f"Required environment variable '{name}' is not set"
+        log.error(msg)
+        raise EnvironmentError(msg)
+    
+    if default is not None:
+        return default
+    
+    return None
+
+
+_dotenv_loaded: set = set()
+
+
+def _load_dotenv(path: str) -> None:
+    global _dotenv_loaded
+    
+    abs_path = os.path.abspath(path)
+    if abs_path in _dotenv_loaded:
+        return
+    
+    if not os.path.isfile(abs_path):
+        return
+    
+    try:
+        with open(abs_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if "=" not in line:
+                    continue
+                key, _, value = line.partition("=")
+                key = key.strip()
+                value = value.strip()
+                if (value.startswith('"') and value.endswith('"')) or \
+                    (value.startswith("'") and value.endswith("'")):
+                    value = value[1:-1]
+                if key and value:
+                    os.environ.setdefault(key, value)
+        _dotenv_loaded.add(abs_path)
+    except (IOError, OSError):
+        pass
+
+
+def _load_dotenv_auto() -> None:
+    global _dotenv_loaded
+    
+    cwd = os.getcwd()
+    dirs = [cwd]
+    
+    parent = cwd
+    while True:
+        new_parent = os.path.dirname(parent)
+        if new_parent == parent:
+            break
+        parent = new_parent
+        dirs.append(parent)
+    
+    for d in dirs:
+        env_file = os.path.join(d, ".env")
+        if os.path.isfile(env_file):
+            _load_dotenv(env_file)
+
 
 if __name__ == "__main__":
     cls()

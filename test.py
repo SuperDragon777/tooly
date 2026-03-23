@@ -195,3 +195,10 @@ pwd = tooly.password(
     error_msg="Password must contain at least one digit.",
 )
 print(f"You entered: {pwd}")
+
+#* Env example
+try:
+    db_url = tooly.env("DATABASE_URL", required=True)
+    print(f"Database URL: {db_url}")
+except Exception as e:
+    print(f"Error: {e}")
