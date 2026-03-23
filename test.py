@@ -202,3 +202,6 @@ try:
     print(f"Database URL: {db_url}")
 except Exception as e:
     print(f"Error: {e}")
+
+#* Run example
+tooly.run("pip install tooly-dev", spinner=True, spinner_label="Installing tooly", timeout=60)

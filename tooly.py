@@ -1,6 +1,6 @@
 __version__ = "1.4.0"
 __author__ = "SuperDragon777"
-__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner", "password", "env"]
+__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner", "password", "env", "run"]
 
 import platform
 import sys
@@ -18,6 +18,7 @@ import re
 import subprocess
 import functools
 import random
+from dataclasses import dataclass, field
 
 try:
     import tty as _tty
@@ -179,7 +180,8 @@ def spinner(label: str = "Loading", frames="⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏", don
         stop_event.set()
         t.join()
         sys.stdout.write("\r" + " " * (len(label) + 10) + "\r")
-        sys.stdout.write(colors.success(done_msg) + "\n")
+        if done_msg:
+            sys.stdout.write(colors.success(done_msg) + "\n")
         sys.stdout.flush()
 
 class DiffMode(Enum):
@@ -1560,6 +1562,160 @@ def _load_dotenv_auto() -> None:
         env_file = os.path.join(d, ".env")
         if os.path.isfile(env_file):
             _load_dotenv(env_file)
+
+@dataclass
+class RunResult:
+    returncode: int
+    stdout: str = ""
+    stderr: str = ""
+    success: bool = field(init=False)
+
+    def __post_init__(self):
+        self.success = self.returncode == 0
+
+_spinner = spinner
+
+
+def run(
+    cmd: Union[str, list[str]],
+    *,
+    live: bool = False,
+    timeout: Optional[float] = None,
+    spinner: bool = True,
+    spinner_label: Optional[str] = None,
+    cwd: Optional[str] = None,
+    env: Optional[dict] = None,
+    shell: Optional[bool] = None,
+    capture: bool = True,
+) -> RunResult:
+    colors = ColorSystem()
+
+    if shell is None:
+        shell = isinstance(cmd, str)
+
+    if isinstance(cmd, str) and not shell:
+        import shlex
+        cmd = shlex.split(cmd)
+
+    if spinner_label is None:
+        if isinstance(cmd, str):
+            spinner_label = cmd.split()[0] if cmd else "Running"
+        else:
+            spinner_label = cmd[0] if cmd else "Running"
+
+    stdout_buf, stderr_buf = io.StringIO(), io.StringIO()
+
+    def _stream_output(pipe, buffer, color_fn=None):
+        try:
+            for line in iter(pipe.readline, ""):
+                if line:
+                    if color_fn:
+                        sys.stdout.write(color_fn(line))
+                    else:
+                        sys.stdout.write(line)
+                    sys.stdout.flush()
+                    if capture:
+                        buffer.write(line)
+        finally:
+            pipe.close()
+
+    def _run_proc():
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE if (capture or live) else subprocess.DEVNULL,
+            stderr=subprocess.PIPE if (capture or live) else subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
+            shell=shell,
+            cwd=cwd,
+            env=env,
+            text=True,
+            bufsize=1,
+            encoding="utf-8",
+            errors="replace",
+        )
+
+        if live:
+            stdout_thread, stderr_thread = None, None
+
+            if proc.stdout:
+                stdout_thread = threading.Thread(
+                    target=_stream_output,
+                    args=(proc.stdout, stdout_buf),
+                    daemon=True
+                )
+                stdout_thread.start()
+
+            if proc.stderr:
+                stderr_thread = threading.Thread(
+                    target=_stream_output,
+                    args=(proc.stderr, stderr_buf, colors.yellow),
+                    daemon=True
+                )
+                stderr_thread.start()
+
+            try:
+                proc.wait(timeout=timeout)
+                if stdout_thread:
+                    stdout_thread.join(timeout=1)
+                if stderr_thread:
+                    stderr_thread.join(timeout=1)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
+                sys.stdout.write(colors.error(f"Timeout after {timeout}s") + "\n")
+                sys.stdout.flush()
+                return RunResult(
+                    returncode=-1,
+                    stdout=stdout_buf.getvalue(),
+                    stderr=stderr_buf.getvalue() + f"\n[TIMEOUT] Process killed after {timeout}s"
+                )
+        else:
+            try:
+                out, err = proc.communicate(timeout=timeout)
+                if capture:
+                    stdout_buf.write(out or "")
+                    stderr_buf.write(err or "")
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
+                sys.stdout.write(colors.error(f"Timeout after {timeout}s") + "\n")
+                sys.stdout.flush()
+                return RunResult(
+                    returncode=-1,
+                    stdout=stdout_buf.getvalue(),
+                    stderr=stderr_buf.getvalue() + f"\n[TIMEOUT] Process killed after {timeout}s"
+                )
+
+        return RunResult(
+            returncode=proc.returncode,
+            stdout=stdout_buf.getvalue(),
+            stderr=stderr_buf.getvalue(),
+        )
+
+    try:
+        if spinner and not live:
+            with _spinner(spinner_label, done_msg=""):
+                result = _run_proc()
+        else:
+            result = _run_proc()
+
+        if not live and spinner:
+            if result.success:
+                sys.stdout.write(colors.success(f"{spinner_label} completed") + "\n")
+            else:
+                sys.stdout.write(colors.error(f"{spinner_label} failed (exit {result.returncode})") + "\n")
+            sys.stdout.flush()
+
+        return result
+
+    except FileNotFoundError as e:
+        sys.stdout.write(colors.error(f"Command not found: {cmd}") + "\n")
+        sys.stdout.flush()
+        return RunResult(returncode=-1, stderr=str(e))
+    except Exception as e:
+        sys.stdout.write(colors.error(f"Error: {e}") + "\n")
+        sys.stdout.flush()
+        return RunResult(returncode=-1, stderr=str(e))
 
 
 if __name__ == "__main__":
