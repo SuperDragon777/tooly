@@ -1,6 +1,6 @@
 __version__ = "1.4.0"
 __author__ = "SuperDragon777"
-__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner", "password", "env", "run", "humanize"]
+__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner", "password", "env", "run", "humanize", "tempdir"]
 
 import platform
 import sys
@@ -19,6 +19,8 @@ import subprocess
 import functools
 import random
 from dataclasses import dataclass, field
+import tempfile
+import shutil
 
 try:
     import tty as _tty
@@ -1769,6 +1771,17 @@ def _humanize_number(value: Union[int, float]) -> str:
         return f"{value / 1_000:.1f}K"
     else:
         return str(int(value)) if value == int(value) else f"{value:.1f}"
+
+@contextmanager
+def tempdir(suffix: str = "", prefix: str = "tmp", dir: str = None):
+    colors = ColorSystem()
+    path = tempfile.mkdtemp(suffix=suffix, prefix=prefix, dir=dir)
+    log.debug(f"[tempdir] created: {path}")
+    try:
+        yield path
+    finally:
+        shutil.rmtree(path, ignore_errors=True)
+        log.debug(f"[tempdir] removed: {path}")
 
 if __name__ == "__main__":
     cls()

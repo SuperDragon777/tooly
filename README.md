@@ -208,6 +208,28 @@ pwd = tooly.password(
     error_msg="Password must contain at least one digit.",
 )
 print(f"You entered: {pwd}")
+
+#* Env example
+try:
+    db_url = tooly.env("DATABASE_URL", required=True)
+    print(f"Database URL: {db_url}")
+except Exception as e:
+    print(f"Error: {e}")
+
+#* Run example
+tooly.run("pip install tooly-dev", spinner=True, spinner_label="Installing tooly", timeout=60)
+
+#* Humanize example
+print("Download size:", tooly.humanize(1500000, "bytes"))
+print("Estimated time:",tooly.humanize(4521, "seconds"))
+print("Balance:",tooly.humanize(2_300_000, "num"))
+
+#* Tempdir example
+with tooly.tempdir() as tmp:
+    print(f"Temp file location: {tmp}")
+    file_path = os.path.join(tmp, "testfolder")
+    tooly.run(f"mkdir {file_path}")
+    tooly.countdown(10, label="Waiting")
 ```
 
 ## License
