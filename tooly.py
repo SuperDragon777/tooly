@@ -1,6 +1,6 @@
 __version__ = "1.4.0"
 __author__ = "SuperDragon777"
-__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner", "password", "env", "run"]
+__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner", "password", "env", "run", "humanize"]
 
 import platform
 import sys
@@ -1717,6 +1717,58 @@ def run(
         sys.stdout.flush()
         return RunResult(returncode=-1, stderr=str(e))
 
+def humanize(value: Union[int, float], kind: str = "num") -> str:
+    if kind == "bytes":
+        return _humanize_bytes(value)
+    elif kind == "seconds":
+        return _humanize_seconds(value)
+    else:
+        return _humanize_number(value)
+
+
+def _humanize_bytes(value: Union[int, float]) -> str:
+    for unit in ["B", "KB", "MB", "GB", "TB", "PB"]:
+        if abs(value) < 1024.0:
+            if unit == "B":
+                return f"{int(value)} {unit}"
+            return f"{value:.1f} {unit}"
+        value /= 1024.0
+    return f"{value:.1f} EB"
+
+
+def _humanize_seconds(value: Union[int, float]) -> str:
+    value = int(value)
+    if value < 60:
+        return f"{value}s"
+    
+    parts = []
+    hours, remainder = divmod(value, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    
+    if hours > 0:
+        parts.append(f"{hours}h")
+    if minutes > 0:
+        parts.append(f"{minutes}m")
+    if seconds > 0 or not parts:
+        parts.append(f"{seconds}s")
+    
+    return " ".join(parts)
+
+
+def _humanize_number(value: Union[int, float]) -> str:
+    value = float(value)
+    abs_val = abs(value)
+    
+    if abs_val >= 1_000_000_000_000:
+        return f"{value / 1_000_000_000_000:.1f}T"
+    elif abs_val >= 1_000_000_000:
+        return f"{value / 1_000_000_000:.1f}B"
+    elif abs_val >= 1_000_000:
+        return f"{value / 1_000_000:.1f}M"
+    elif abs_val >= 1_000:
+        return f"{value / 1_000:.1f}K"
+    else:
+        return str(int(value)) if value == int(value) else f"{value:.1f}"
 
 if __name__ == "__main__":
     cls()

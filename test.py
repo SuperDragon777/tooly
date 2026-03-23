@@ -205,3 +205,8 @@ except Exception as e:
 
 #* Run example
 tooly.run("pip install tooly-dev", spinner=True, spinner_label="Installing tooly", timeout=60)
+
+#* Humanize example
+print("Download size:", tooly.humanize(1500000, "bytes"))
+print("Estimated time:",tooly.humanize(4521, "seconds"))
+print("Balance:",tooly.humanize(2_300_000, "num"))
