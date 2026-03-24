@@ -2,6 +2,7 @@ import tooly
 import time
 from datetime import datetime
 import requests
+import os
 
 colors = tooly.ColorSystem() #? recommended
 wait_time = 2
