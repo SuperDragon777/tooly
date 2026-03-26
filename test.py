@@ -248,3 +248,58 @@ clients_data = {
 
 for key, value in clients_data.items():
     print(f"{colors.red(key.upper())}: {value}")
+
+#* Every example
+counter = 0
+
+#? Option 1: As a decorator
+@tooly.every(seconds=2)
+def refresh_token():
+    global counter
+    counter += 1
+    print(f"{colors.info('Token refreshed')} #{counter} at {datetime.now().strftime('%H:%M:%S')}")
+
+time.sleep(5)  # working 5 seconds
+refresh_token.stop()  # stop
+print(f"{colors.success('Stopped')} — total {counter} refreshes")
+
+#? Option 2: Direct call with function
+call_count = 0
+
+def check_status():
+    global call_count
+    call_count += 1
+    print(f"{colors.warning('Status check')} #{call_count}")
+
+handle = tooly.every(1, check_status)  # run every second
+time.sleep(3)
+handle.pause()  # pause
+print(f"{colors.info('Paused')}")
+time.sleep(2)
+handle.resume()  # resume
+time.sleep(2)
+handle.stop()  # stop
+print(f"{colors.success('Stopped')} — total {call_count} checks")
+
+#? Option 3: with arguments and without autorun
+def greet(name, greeting="Hello"):
+    print(f"{greeting}, {name}!")
+
+handle2 = tooly.every(5, greet, args=("Alice",), kwargs={"greeting": "Hi"}, start_immediately=False)
+handle2.start()  # manual start
+time.sleep(6)
+handle2.stop()
+
+#? Option 4: direct function call via handle
+manual_count = 0
+
+@tooly.every(seconds=60)  # long interval
+def manual_task():
+    global manual_count
+    manual_count += 1
+    print(f"Manual task #{manual_count}")
+
+manual_task()  # сall the function immediately manually
+manual_task()  # again
+print(f"{colors.info('Manual calls')}: {manual_count}")
+manual_task.stop()

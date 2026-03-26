@@ -1,13 +1,13 @@
 __version__ = "1.4.0"
 __author__ = "SuperDragon777"
-__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner", "password", "env", "run", "humanize", "tempdir", "lorem"]
+__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner", "password", "env", "run", "humanize", "tempdir", "lorem", "every"]
 
 import platform
 import sys
 import os
 import time
 from contextlib import contextmanager
-from typing import Callable, Optional, Any, Iterable, TypeVar, Iterator, Union
+from typing import Callable, Optional, Any, Iterable, TypeVar, Iterator, Union, overload
 import difflib
 from enum import Enum
 import threading
@@ -2028,6 +2028,109 @@ class Lorem:
         return self.words(words)
 
 lorem = Lorem()
+class _EveryHandle:
+    def __init__(self, func: Callable, interval: float, args: tuple = (), kwargs: dict = None):
+        self._func = func
+        self._interval = interval
+        self._args = args
+        self._kwargs = kwargs or {}
+        self._stop_event = threading.Event()
+        self._pause_event = threading.Event()
+        self._thread: Optional[threading.Thread] = None
+        self._running = False
+        self._paused = False
+    
+    def _run(self):
+        while not self._stop_event.is_set():
+            if self._pause_event.is_set():
+                self._pause_event.wait(timeout=0.1)
+                continue
+            try:
+                self._func(*self._args, **self._kwargs)
+            except Exception as e:
+                log.error(f"every() task failed: {e}")
+            self._stop_event.wait(timeout=self._interval)
+    
+    def start(self) -> "_EveryHandle":
+        if self._running:
+            return self
+        self._running = True
+        self._pause_event.clear()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+        return self
+    
+    def stop(self) -> None:
+        self._stop_event.set()
+        self._running = False
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=1.0)
+    
+    def pause(self) -> None:
+        self._pause_event.set()
+        self._paused = True
+    
+    def resume(self) -> None:
+        self._pause_event.clear()
+        self._paused = False
+    
+    @property
+    def is_running(self) -> bool:
+        return self._running and not self._stop_event.is_set()
+    
+    @property
+    def is_paused(self) -> bool:
+        return self._paused and self._pause_event.is_set()
+    
+    def __call__(self) -> None:
+        self._func(*self._args, **self._kwargs)
+
+
+@overload
+def every(
+    seconds: float,
+    func: Callable,
+    args: tuple = ...,
+    kwargs: dict = ...,
+    start_immediately: bool = ...,
+) -> _EveryHandle: ...
+
+@overload
+def every(
+    seconds: float,
+    func: None = None,
+    args: tuple = ...,
+    kwargs: dict = ...,
+    start_immediately: bool = ...,
+) -> Callable[[Callable], _EveryHandle]: ...
+
+def every(
+    seconds: Optional[float] = None,
+    func: Optional[Callable] = None,
+    args: tuple = (),
+    kwargs: dict = None,
+    start_immediately: bool = True,
+) -> _EveryHandle:
+    if func is None:
+        if seconds is None:
+            raise TypeError("every() requires 'seconds' argument when used as decorator")
+        def decorator(f: Callable) -> _EveryHandle:
+            handle = _EveryHandle(f, seconds, args, kwargs or {})
+            if start_immediately:
+                handle.start()
+            return handle
+        return decorator
+
+    if callable(seconds):
+        func, seconds = seconds, func
+
+    if not isinstance(seconds, (int, float)):
+        raise TypeError("First argument must be interval (number) when func is provided")
+
+    handle = _EveryHandle(func, seconds, args, kwargs or {})
+    if start_immediately:
+        handle.start()
+    return handle
 
 if __name__ == "__main__":
     cls()
