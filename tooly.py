@@ -1,6 +1,6 @@
 __version__ = "1.4.0"
 __author__ = "SuperDragon777"
-__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner", "password", "env", "run", "humanize", "tempdir"]
+__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner", "password", "env", "run", "humanize", "tempdir", "lorem"]
 
 import platform
 import sys
@@ -1782,6 +1782,252 @@ def tempdir(suffix: str = "", prefix: str = "tmp", dir: str = None):
     finally:
         shutil.rmtree(path, ignore_errors=True)
         log.debug(f"[tempdir] removed: {path}")
+
+class Lorem:
+    FIRST_NAMES = [
+        "Alex", "Jordan", "Taylor", "Morgan", "Casey", "Riley", "Avery", "Quinn",
+        "Cameron", "Dakota", "Reese", "Skyler", "Emerson", "Finley", "Hayden",
+        "Peyton", "River", "Sawyer", "Phoenix", "Rowan", "Ivan", "Dmitri", "Alexei",
+        "Nikolai", "Sergei", "Vladimir", "Peter", "Anna", "Elena", "Natasha",
+        "Olga", "Maria", "Tatiana", "Ekaterina", "Julia", "Victoria", "Sophia",
+        "Anastasia", "John", "Michael", "David", "James", "Robert", "William",
+        "Christopher", "Daniel", "Matthew", "Anthony", "Mark", "Donald", "Steven",
+        "Andrew", "Paul", "Joshua", "Kenneth", "Kevin", "Brian", "George",
+        "Edward", "Ronald", "Timothy", "Jason", "Jeffrey", "Ryan", "Jacob",
+        "Gary", "Nicholas", "Eric", "Jonathan", "Stephen", "Larry", "Justin",
+        "Scott", "Brandon", "Benjamin", "Samuel", "Gregory", "Alexander",
+        "Patrick", "Frank", "Raymond", "Jack", "Dennis", "Jerry", "Tyler",
+        "Aaron", "Jose", "Adam", "Henry", "Nathan", "Douglas", "Zachary",
+        "Peter", "Kyle", "Walter", "Ethan", "Jeremy", "Harold", "Keith",
+        "Christian", "Roger", "Noah", "Gerald", "Carl", "Terry", "Sean",
+        "Austin", "Arthur", "Lawrence", "Jesse", "Dylan", "Bryan", "Joe",
+        "Bruce", "Albert", "Willie", "Gabriel", "Logan", "Alan", "Juan",
+        "Wayne", "Roy", "Ralph", "Randy", "Eugene", "Louis", "Philip",
+        "Bobby", "Johnny", "Russell", "Emma", "Olivia", "Isabella", "Mia",
+        "Charlotte", "Amelia", "Harper", "Evelyn", "Abigail", "Emily",
+        "Elizabeth", "Sofia", "Avery", "Ella", "Madison", "Scarlett",
+        "Grace", "Chloe", "Victoria", "Riley", "Layla", "Lily", "Aurora",
+        "Zoey", "Penelope", "Hannah", "Lillian", "Addison", "Lucy", "Nora",
+    ]
+
+    LAST_NAMES = [
+        "Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Miller",
+        "Davis", "Rodriguez", "Martinez", "Hernandez", "Lopez", "Gonzalez",
+        "Wilson", "Anderson", "Thomas", "Taylor", "Moore", "Jackson", "Martin",
+        "Lee", "Perez", "Thompson", "White", "Harris", "Sanchez", "Clark",
+        "Ramirez", "Lewis", "Robinson", "Walker", "Young", "Allen", "King",
+        "Wright", "Scott", "Torres", "Nguyen", "Hill", "Flores", "Green",
+        "Adams", "Nelson", "Baker", "Hall", "Rivera", "Campbell", "Mitchell",
+        "Carter", "Roberts", "Gomez", "Phillips", "Evans", "Turner", "Diaz",
+        "Parker", "Cruz", "Edwards", "Collins", "Reyes", "Stewart", "Morris",
+        "Morales", "Murphy", "Cook", "Rogers", "Gutierrez", "Ortiz", "Morgan",
+        "Cooper", "Peterson", "Bailey", "Reed", "Kelly", "Howard", "Ramos",
+        "Kim", "Cox", "Ward", "Richardson", "Watson", "Brooks", "Chavez",
+        "Wood", "James", "Bennett", "Gray", "Mendoza", "Ruiz", "Hughes",
+        "Price", "Alvarez", "Castillo", "Sanders", "Patel", "Myers", "Long",
+        "Ross", "Foster", "Jimenez", "Petrov", "Ivanov", "Smirnov", "Kuznetsov",
+        "Popov", "Sokolov", "Lebedev", "Kozlov", "Novikov", "Morozov",
+        "Petrova", "Ivanova", "Smirnova", "Kuznetsova", "Popova", "Sokolova",
+        "Lebedeva", "Kozlova", "Novikova", "Morozova", "Volkov", "Volkova",
+        "Andreev", "Andreeva", "Alexeev", "Alexeeva", "Fedorov", "Fedorova",
+        "Stepanov", "Stepanova", "Mikhailov", "Mikhailova", "Orlov", "Orlova",
+    ]
+
+    DOMAINS = [
+        "gmail.com", "yahoo.com", "hotmail.com", "outlook.com", "mail.com",
+        "protonmail.com", "icloud.com", "aol.com", "zoho.com", "example.com",
+        "test.com", "demo.com", "sample.org", "fake.net", "temp.io",
+    ]
+
+    LOREM_WORDS = [
+        "lorem", "ipsum", "dolor", "sit", "amet", "consectetur", "adipiscing",
+        "elit", "sed", "do", "eiusmod", "tempor", "incididunt", "ut", "labore",
+        "et", "dolore", "magna", "aliqua", "enim", "ad", "minim", "veniam",
+        "quis", "nostrud", "exercitation", "ullamco", "laboris", "nisi",
+        "aliquip", "ex", "ea", "commodo", "consequat", "duis", "aute", "irure",
+        "in", "reprehenderit", "voluptate", "velit", "esse", "cillum", "fugiat",
+        "nulla", "pariatur", "excepteur", "sint", "occaecat", "cupidatat", "non",
+        "proident", "sunt", "culpa", "qui", "officia", "deserunt", "mollit",
+        "anim", "id", "est", "laborum", "curabitur", "pretium", "tincidunt",
+        "lacus", "nulla", "gravida", "orci", "a", "nec", "nisi", "sagittis",
+        "sed", "turpis", "torquent", "per", "conubia", "nostra", "inceptos",
+        "himenaeos", "integer", "scelerisque", "massa", "vitae", "justo",
+        "nec", "facilisis", "cras", "tristique", "senectus", "et", "netus",
+        "fames", "malesuada", "fames", "ante", "primis", "faucibus",
+    ]
+
+    CITIES = [
+        "New York", "Los Angeles", "Chicago", "Houston", "Phoenix",
+        "Philadelphia", "San Antonio", "San Diego", "Dallas", "San Jose",
+        "Austin", "Jacksonville", "Fort Worth", "Columbus", "Charlotte",
+        "San Francisco", "Indianapolis", "Seattle", "Denver", "Washington",
+        "Boston", "El Paso", "Nashville", "Detroit", "Oklahoma City",
+        "Portland", "Las Vegas", "Memphis", "Louisville", "Baltimore",
+        "Milwaukee", "Albuquerque", "Tucson", "Fresno", "Sacramento",
+        "Moscow", "Saint Petersburg", "Novosibirsk", "Yekaterinburg", "Kazan",
+        "Nizhny Novgorod", "Chelyabinsk", "Samara", "Omsk", "Rostov-on-Don",
+        "Ufa", "Krasnoyarsk", "Voronezh", "Perm", "Volgograd",
+        "London", "Paris", "Berlin", "Madrid", "Rome", "Vienna", "Amsterdam",
+        "Brussels", "Stockholm", "Copenhagen", "Oslo", "Helsinki", "Dublin",
+        "Tokyo", "Beijing", "Shanghai", "Seoul", "Singapore", "Hong Kong",
+        "Mumbai", "Delhi", "Bangalore", "Sydney", "Melbourne", "Toronto",
+    ]
+
+    STREETS = [
+        "Main", "Oak", "Maple", "Cedar", "Pine", "Elm", "Washington", "Lake",
+        "Hill", "Sunset", "High", "Park", "Mill", "Union", "Market", "Spring",
+        "River", "Center", "School", "Station", "Court", "Broadway", "Church",
+        "Garden", "Central", "Forest", "Walnut", "State", "South", "North",
+        "Lincoln", "Jefferson", "Madison", "Jackson", "Monroe", "Adams",
+    ]
+
+    def __init__(self, seed: Optional[int] = None):
+        if seed is not None:
+            random.seed(seed)
+
+    def words(self, count: int = 10) -> str:
+        return " ".join(random.choice(self.LOREM_WORDS) for _ in range(count))
+
+    def sentences(self, count: int = 3) -> str:
+        sentences = []
+        for _ in range(count):
+            num_words = random.randint(8, 15)
+            text = self.words(num_words)
+            text = text[0].upper() + text[1:] + "."
+            sentences.append(text)
+        return " ".join(sentences)
+
+    def paragraph(self, sentences_count: int = 5) -> str:
+        return self.sentences(sentences_count)
+
+    def paragraphs(self, count: int = 3) -> str:
+        return "\n\n".join(self.paragraph(random.randint(3, 6)) for _ in range(count))
+
+    def name(self) -> str:
+        return f"{random.choice(self.FIRST_NAMES)} {random.choice(self.LAST_NAMES)}"
+
+    def first_name(self) -> str:
+        return random.choice(self.FIRST_NAMES)
+
+    def last_name(self) -> str:
+        return random.choice(self.LAST_NAMES)
+
+    def email(self, domain: Optional[str] = None) -> str:
+        first = random.choice(self.FIRST_NAMES).lower()
+        last = random.choice(self.LAST_NAMES).lower()
+        num = random.randint(1, 999)
+        email_domain = domain or random.choice(self.DOMAINS)
+        variants = [
+            f"{first}{num}@{email_domain}",
+            f"{first}.{last}@{email_domain}",
+            f"{first}_{last}{num}@{email_domain}",
+            f"{first}{last}@{email_domain}",
+        ]
+        return random.choice(variants)
+
+    def phone(self, country_code: str = "+1") -> str:
+        area = random.randint(200, 999)
+        prefix = random.randint(200, 999)
+        line = random.randint(1000, 9999)
+        return f"{country_code} ({area}) {prefix}-{line}"
+
+    def date(self, past: int = 365, start_date: Optional[datetime] = None) -> str:
+        if start_date is None:
+            start_date = datetime.now()
+        days_ago = random.randint(0, past)
+        date = start_date - timedelta(days=days_ago)
+        return date.strftime("%Y-%m-%d")
+
+    def datetime(self, past: int = 365, start_date: Optional[datetime] = None) -> str:
+        if start_date is None:
+            start_date = datetime.now()
+        days_ago = random.randint(0, past)
+        seconds_ago = random.randint(0, 86400)
+        dt = start_date - timedelta(days=days_ago, seconds=seconds_ago)
+        return dt.strftime("%Y-%m-%d %H:%M:%S")
+
+    def address(self) -> str:
+        street_num = random.randint(1, 9999)
+        street = random.choice(self.STREETS)
+        street_type = random.choice(["St", "Ave", "Blvd", "Rd", "Dr", "Ln", "Way"])
+        city = random.choice(self.CITIES)
+        state = random.choice(["CA", "NY", "TX", "FL", "IL", "WA", "MA", "CO"])
+        zip_code = random.randint(10000, 99999)
+        return f"{street_num} {street} {street_type}, {city}, {state} {zip_code}"
+
+    def company(self) -> str:
+        prefixes = [
+            "Tech", "Global", "Smart", "Digital", "Cloud", "Data", "Net",
+            "Cyber", "Info", "Soft", "Web", "Auto", "Bio", "Eco", "Fin",
+            "Med", "Nano", "Quantum", "Virtual", "Advanced",
+        ]
+        suffixes = [
+            "Corp", "Inc", "LLC", "Ltd", "Group", "Systems", "Solutions",
+            "Technologies", "Labs", "Works", "Soft", "ware", "net", "ix",
+        ]
+        return f"{random.choice(prefixes)}{random.choice(suffixes)}"
+
+    def job_title(self) -> str:
+        titles = [
+            "Software Engineer", "Product Manager", "Data Scientist",
+            "UX Designer", "DevOps Engineer", "QA Engineer", "Project Manager",
+            "Business Analyst", "Marketing Manager", "Sales Representative",
+            "HR Manager", "Financial Analyst", "Operations Manager",
+            "Customer Support", "Content Writer", "Graphic Designer",
+            "System Administrator", "Network Engineer", "Security Analyst",
+            "Machine Learning Engineer", "Frontend Developer",
+            "Backend Developer", "Full Stack Developer", "Mobile Developer",
+        ]
+        return random.choice(titles)
+
+    def uuid(self) -> str:
+        hex_chars = "0123456789abcdef"
+        parts = [
+            "".join(random.choice(hex_chars) for _ in range(8)),
+            "".join(random.choice(hex_chars) for _ in range(4)),
+            "".join(random.choice(hex_chars) for _ in range(4)),
+            "".join(random.choice(hex_chars) for _ in range(4)),
+            "".join(random.choice(hex_chars) for _ in range(12)),
+        ]
+        return "-".join(parts)
+
+    def ip(self, version: int = 4) -> str:
+        if version == 4:
+            return ".".join(str(random.randint(0, 255)) for _ in range(4))
+        elif version == 6:
+            hex_chars = "0123456789abcdef"
+            parts = ["".join(random.choice(hex_chars) for _ in range(4)) for _ in range(8)]
+            return ":".join(parts)
+        else:
+            raise ValueError(f"Unsupported IP version: {version}")
+
+    def url(self) -> str:
+        protocols = ["https", "http"]
+        domains = ["www", "app", "api", "dev", "test", "demo"]
+        domain_name = random.choice(["example", "test", "demo", "sample", "fake"])
+        tld = random.choice(["com", "org", "net", "io", "co"])
+        path = "/".join(self.words(random.randint(1, 3)).split())
+        return f"{random.choice(protocols)}://{random.choice(domains)}.{domain_name}.{tld}/{path}"
+
+    def credit_card_number(self) -> str:
+        prefixes = ["4", "5", "51", "52", "53", "54", "55", "34", "37", "6011"]
+        prefix = random.choice(prefixes)
+        remaining = 16 - len(prefix)
+        number = prefix + "".join(str(random.randint(0, 9)) for _ in range(remaining - 1))
+        
+        check_digit = random.randint(0, 9)
+        return number + str(check_digit)
+
+    def ssn(self) -> str:
+        area = random.randint(1, 899)
+        group = random.randint(1, 99)
+        serial = random.randint(1, 9999)
+        return f"{area:03d}-{group:02d}-{serial:04d}"
+
+    def __call__(self, words: int = 10) -> str:
+        return self.words(words)
+
+lorem = Lorem()
 
 if __name__ == "__main__":
     cls()

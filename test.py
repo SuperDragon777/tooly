@@ -5,6 +5,8 @@ import requests
 import os
 
 colors = tooly.ColorSystem() #? recommended
+lorem = tooly.Lorem(seed=0) #? change or delete for new data
+
 wait_time = 2
 skip_userinput = False
 
@@ -218,3 +220,31 @@ with tooly.tempdir() as tmp:
     file_path = os.path.join(tmp, "testfolder")
     tooly.run(f"mkdir {file_path}")
     tooly.countdown(10, label="Waiting")
+
+#* Lorem example
+print(f"{colors.red("Lorem example words")}: {tooly.lorem(words=10)}") # or tooly.lorem.words(10)
+print(f"{colors.red("Lorem example sentences")}: {tooly.lorem.sentences(3)}")
+print(f"{colors.red("Lorem example paragraph")}: {tooly.lorem.paragraph(5)}")
+print(f"{colors.red("Lorem example paragraphs")}: {tooly.lorem.paragraphs(2)}")
+
+clients_data = {
+    "name": tooly.lorem.name(),
+    "first_name": tooly.lorem.first_name(),
+    "last_name": tooly.lorem.last_name(),
+    "email": tooly.lorem.email(),
+    "register_date": tooly.lorem.date(past=30),
+    "register_datetime": tooly.lorem.datetime(past=30),
+    "phone": tooly.lorem.phone(country_code="+7"),
+    "address": tooly.lorem.address(),
+    "company": tooly.lorem.company(),
+    "job_title": tooly.lorem.job_title(),
+    "uuid": tooly.lorem.uuid(),
+    "ip4": tooly.lorem.ip(4),
+    "ip6": tooly.lorem.ip(6),
+    "url": tooly.lorem.url(),
+    "credit_card_number": tooly.lorem.credit_card_number(),
+    "ssn": tooly.lorem.ssn()
+}
+
+for key, value in clients_data.items():
+    print(f"{colors.red(key.upper())}: {value}")
