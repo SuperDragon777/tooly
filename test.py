@@ -303,3 +303,52 @@ manual_task()  # сall the function immediately manually
 manual_task()  # again
 print(f"{colors.info('Manual calls')}: {manual_count}")
 manual_task.stop()
+
+#* Saves example
+#? Test dict
+data = {
+    "tooly": {
+        "description": "Very cool python lib",
+        "version": "1.5.0"
+    }
+}
+
+#? Check for existing saves
+exists = tooly.saves.exists("test", fmt="pickle")
+print(f"Save is exists? {exists}")
+input("Press Enter to continue...")
+
+#? Making saves
+tooly.saves.save("test", data, fmt="pickle")
+input("Press Enter to continue...")
+
+#? Get info about saves
+save_info = tooly.saves.info("test", fmt="pickle")
+print(f"Save info: {save_info}")
+input("Press Enter to continue...")
+
+#? Get list of saves
+saves_list = tooly.saves.list()
+print(f"Avalible saves: {saves_list}")
+input("Press Enter to continue...")
+
+#? Load data from save
+load_data = tooly.saves.load("test", fmt="pickle")
+print(f"Loaded data: {load_data}")
+input("Press Enter to continue...")
+
+#? Find saves
+finded_save = tooly.saves.find("test")
+print(f"Finded save: {finded_save}")
+input("Press Enter to continue...")
+
+#? Deleting saves
+tooly.saves.delete("test", fmt="pickle")
+input("Press Enter to continue...")
+
+#? Another save
+tooly.saves.save("test2", data, fmt="pickle")
+input("Press Enter to continue...")
+
+#? Clear all saves (in folder)
+tooly.saves.clear()

@@ -1,13 +1,13 @@
 __version__ = "1.4.0"
 __author__ = "SuperDragon777"
-__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner", "password", "env", "run", "humanize", "tempdir", "lorem", "every"]
+__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner", "password", "env", "run", "humanize", "tempdir", "lorem", "every", "saves"]
 
 import platform
 import sys
 import os
 import time
 from contextlib import contextmanager
-from typing import Callable, Optional, Any, Iterable, TypeVar, Iterator, Union, overload
+from typing import Callable, Optional, Any, Iterable, TypeVar, Iterator, Union, overload, List, Dict, Set
 import difflib
 from enum import Enum
 import threading
@@ -21,6 +21,7 @@ import random
 from dataclasses import dataclass, field
 import tempfile
 import shutil
+import json
 
 try:
     import tty as _tty
@@ -2131,6 +2132,193 @@ def every(
     if start_immediately:
         handle.start()
     return handle
+
+class _SavesManager:
+    def __init__(self):
+        self._default_folder = os.path.join(os.path.expanduser("~"), ".tooly", "saves")
+        self._known_folders: set[str] = set()
+        self.verbose: bool = True
+    
+    def _colors(self):
+        return ColorSystem()
+
+    def _resolve_folder(self, folder: Optional[str]) -> str:
+        path = folder if folder is not None else self._default_folder
+        self._known_folders.add(path)
+        return path
+
+    def _resolve_path(self, key: str, fmt: str, folder: Optional[str]) -> str:
+        ext = ".pkl" if fmt == "pickle" else ".json"
+        return os.path.join(self._resolve_folder(folder), key + ext)
+
+    def _ensure_folder(self, folder: str) -> None:
+        os.makedirs(folder, exist_ok=True)
+
+    def save(self, key: str, data: Any, *, fmt: str = "json", folder: Optional[str] = None) -> None:
+        colors = self._colors()
+        folder_path = self._resolve_folder(folder)
+        self._ensure_folder(folder_path)
+        file_path = self._resolve_path(key, fmt, folder)
+
+        try:
+            if fmt == "pickle":
+                with open(file_path, "wb") as f:
+                    import pickle
+                    pickle.dump(data, f)
+            elif fmt == "json":
+                with open(file_path, "w", encoding="utf-8") as f:
+                    json.dump(data, f, ensure_ascii=False, indent=2)
+            else:
+                raise ValueError(f"Unknown format '{fmt}'. Use 'json' or 'pickle'.")
+        except TypeError as e:
+            if self.verbose:
+                print(colors.error(f"Cannot serialize '{key}' as JSON: {e}. Try fmt='pickle'."))
+            raise
+        except Exception as e:
+            if self.verbose:
+                log.error(f"saves.save failed for '{key}': {e}")
+            raise
+
+        if self.verbose:
+            print(colors.success(f"Saved '{key}' → {file_path}"))
+
+    def load(self, key: str, *, fmt: str = "json", folder: Optional[str] = None, default: Any = None) -> Any:
+        file_path = self._resolve_path(key, fmt, folder)
+
+        if not os.path.isfile(file_path):
+            return default
+
+        try:
+            if fmt == "pickle":
+                with open(file_path, "rb") as f:
+                    import pickle
+                    return pickle.load(f)
+            else:
+                with open(file_path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+        except Exception as e:
+            log.error(f"saves.load failed for '{key}': {e}")
+            return default
+
+    def delete(self, key: str, *, fmt: str = "json", folder: Optional[str] = None) -> bool:
+        colors = self._colors()
+        file_path = self._resolve_path(key, fmt, folder)
+
+        if not os.path.isfile(file_path):
+            if self.verbose:
+                print(colors.warning(f"'{key}' not found, nothing to delete."))
+            return False
+
+        try:
+            os.remove(file_path)
+            if self.verbose:
+                print(colors.success(f"Deleted '{key}'"))
+            return True
+        except Exception as e:
+            log.error(f"saves.delete failed for '{key}': {e}")
+            return False
+
+    def exists(self, key: str, *, fmt: str = "json", folder: Optional[str] = None) -> bool:
+        return os.path.isfile(self._resolve_path(key, fmt, folder))
+
+    def list(self, folder: Optional[str] = None) -> List[dict]:
+        folder_path = self._resolve_folder(folder)
+        results = []
+
+        if not os.path.isdir(folder_path):
+            return results
+
+        for fname in sorted(os.listdir(folder_path)):
+            if not (fname.endswith(".json") or fname.endswith(".pkl")):
+                continue
+            full_path = os.path.join(folder_path, fname)
+            stat = os.stat(full_path)
+            fmt = "pickle" if fname.endswith(".pkl") else "json"
+            key = fname[:-4] if fmt == "json" else fname[:-4]
+            results.append({
+                "key":      key,
+                "fmt":      fmt,
+                "size":     stat.st_size,
+                "modified": datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M"),
+            })
+
+        return results
+
+    def find(self, key: str) -> List[dict]:
+        results = []
+        search_folders = self._known_folders | {self._default_folder}
+
+        for folder_path in search_folders:
+            if not os.path.isdir(folder_path):
+                continue
+            for fmt, ext in [("json", ".json"), ("pickle", ".pkl")]:
+                full_path = os.path.join(folder_path, key + ext)
+                if os.path.isfile(full_path):
+                    stat = os.stat(full_path)
+                    results.append({
+                        "key":      key,
+                        "fmt":      fmt,
+                        "folder":   folder_path,
+                        "size":     stat.st_size,
+                        "modified": datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M"),
+                    })
+
+        return results
+
+    def info(self, key: str, *, fmt: str = "json", folder: Optional[str] = None) -> Optional[dict]:
+        file_path = self._resolve_path(key, fmt, folder)
+
+        if not os.path.isfile(file_path):
+            return None
+
+        stat = os.stat(file_path)
+        return {
+            "key":      key,
+            "fmt":      fmt,
+            "path":     file_path,
+            "size":     stat.st_size,
+            "created":  datetime.fromtimestamp(stat.st_ctime).strftime("%Y-%m-%d %H:%M:%S"),
+            "modified": datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m-%d %H:%M:%S"),
+        }
+
+    def clear(self, folder: Optional[str] = None, *, confirm: bool = True) -> int:
+        colors = self._colors()
+        folder_path = self._resolve_folder(folder)
+
+        if not os.path.isdir(folder_path):
+            if self.verbose:
+                print(colors.warning(f"Folder '{folder_path}' does not exist."))
+            return 0
+
+        files = [
+            f for f in os.listdir(folder_path)
+            if f.endswith(".json") or f.endswith(".pkl")
+        ]
+
+        if not files:
+            if self.verbose:
+                print(colors.info(f"Nothing to clear in '{folder_path}'."))
+            return 0
+
+        if confirm:
+            if not globals()["confirm"](f"Delete {len(files)} save(s) in '{folder_path}'?"):
+                print(colors.warning("Cancelled."))
+                return 0
+
+        deleted = 0
+        for fname in files:
+            try:
+                os.remove(os.path.join(folder_path, fname))
+                deleted += 1
+            except Exception as e:
+                log.error(f"Could not delete '{fname}': {e}")
+
+        if self.verbose:
+            print(colors.success(f"Cleared {deleted} save(s) from '{folder_path}'"))
+
+        return deleted
+
+saves = _SavesManager()
 
 if __name__ == "__main__":
     cls()
