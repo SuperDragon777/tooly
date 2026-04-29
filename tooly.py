@@ -1,4 +1,4 @@
-__version__ = "1.4.0"
+__version__ = "1.5.0"
 __author__ = "SuperDragon777"
 __all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner", "password", "env", "run", "humanize", "tempdir", "lorem", "every", "saves"]
 
