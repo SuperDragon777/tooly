@@ -1,6 +1,6 @@
 __version__ = "1.5.0"
 __author__ = "SuperDragon777"
-__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner", "password", "env", "run", "humanize", "tempdir", "lorem", "every", "saves"]
+__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner", "password", "env", "run", "humanize", "tempdir", "lorem", "every", "saves", "patch"]
 
 import platform
 import sys
@@ -2319,6 +2319,172 @@ class _SavesManager:
         return deleted
 
 saves = _SavesManager()
+class _PatchedObject:
+    __slots__ = ("_patch_target", "_patch_ctx")
+
+    def __init__(self, target: Any, ctx: "_PatchContext"):
+        object.__setattr__(self, "_patch_target", target)
+        object.__setattr__(self, "_patch_ctx", ctx)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(object.__getattribute__(self, "_patch_target"), name)
+
+    def __setattr__(self, name: str, new_value: Any) -> None:
+        target = object.__getattribute__(self, "_patch_target")
+        ctx    = object.__getattribute__(self, "_patch_ctx")
+        try:
+            old_value = getattr(target, name)
+        except AttributeError:
+            old_value = _PATCH_MISSING
+        setattr(target, name, new_value)
+        ctx._record(name, old_value, new_value)
+
+    def __repr__(self) -> str:
+        return repr(object.__getattribute__(self, "_patch_target"))
+
+
+_PATCH_MISSING = object()
+
+
+class _PatchContext:
+    def __init__(
+        self,
+        obj: Any,
+        *,
+        label:      Optional[str]  = None,
+        stream                     = None,
+        show_types: bool           = False,
+        show_summary: bool         = True,
+        on_change: Optional[Callable[[str, Any, Any], None]] = None,
+    ):
+        self._obj          = obj
+        self._label        = label or type(obj).__name__
+        self._stream       = stream or sys.stdout
+        self._show_types   = show_types
+        self._show_summary = show_summary
+        self._on_change    = on_change
+        self._changes: list[tuple[str, Any, Any]] = []
+        self._colors       = ColorSystem()
+        self._proxy: Optional[_PatchedObject] = None
+
+    def _fmt_val(self, v: Any) -> str:
+        if v is _PATCH_MISSING:
+            return self._colors.grey("<new>")
+        r = repr(v)
+        
+        if len(r) > 60:
+            r = r[:57] + "..."
+        if self._show_types:
+            r = f"{r} ({type(v).__name__})"
+        return r
+
+    def _record(self, name: str, old: Any, new: Any) -> None:
+        colors = self._colors
+        ts     = colors.grey(datetime.now().strftime("%H:%M:%S.%f")[:-3])
+        label  = colors.yellow(f"[~] {self._label}")
+        key    = colors.bold(f"{name:<18}")
+        arrow  = colors.grey("→")
+
+        if old is _PATCH_MISSING:
+            
+            line = f"{ts} {label} {key} {colors.green(self._fmt_val(new))} {colors.grey('(added)')}"
+        elif old == new:
+            
+            line = f"{ts} {label} {key} {self._fmt_val(old)} {arrow} {colors.grey('(no change)')}"
+        else:
+            line = (
+                f"{ts} {label} {key}"
+                f" {colors.red(self._fmt_val(old))}"
+                f" {arrow}"
+                f" {colors.green(self._fmt_val(new))}"
+            )
+
+        self._stream.write(line + "\n")
+        self._stream.flush()
+        self._changes.append((name, old, new))
+
+        if self._on_change is not None:
+            try:
+                self._on_change(name, old, new)
+            except Exception as exc:
+                self._stream.write(
+                    self._colors.error(f"on_change callback raised: {exc}") + "\n"
+                )
+
+    def _print_summary(self) -> None:
+        colors  = self._colors
+        changed = [(n, o, v) for n, o, v in self._changes if o != v and o is not _PATCH_MISSING]
+        added   = [(n, o, v) for n, o, v in self._changes if o is _PATCH_MISSING]
+        no_op   = [(n, o, v) for n, o, v in self._changes if o == v]
+
+        parts = []
+        if changed:
+            parts.append(colors.yellow(f"{len(changed)} changed"))
+        if added:
+            parts.append(colors.green(f"{len(added)} added"))
+        if no_op:
+            parts.append(colors.grey(f"{len(no_op)} no-op"))
+
+        summary = ", ".join(parts) if parts else colors.grey("no changes")
+        self._stream.write(
+            colors.grey(f"[patch] {self._label}: ") + summary + "\n"
+        )
+        self._stream.flush()
+
+    @property
+    def changes(self) -> list[tuple[str, Any, Any]]:
+        return list(self._changes)
+
+    def reset(self) -> None:
+        self._changes.clear()
+
+    def revert(self, names: Optional[list[str]] = None) -> None:
+        colors = self._colors
+        for name, old, _ in self._changes:
+            if names is not None and name not in names:
+                continue
+            if old is _PATCH_MISSING:
+                try:
+                    delattr(self._obj, name)
+                except AttributeError:
+                    pass
+            else:
+                setattr(self._obj, name, old)
+            self._stream.write(
+                colors.grey("[patch] reverted ") + colors.bold(name) + "\n"
+            )
+        self._stream.flush()
+
+    def __enter__(self) -> "_PatchedObject":
+        self._proxy = _PatchedObject(self._obj, self)
+        return self._proxy
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> bool:
+        if self._show_summary:
+            self._print_summary()
+        return False
+
+
+def patch(
+    obj: Any,
+    *,
+    label:        Optional[str]  = None,
+    stream                       = None,
+    show_types:   bool           = False,
+    show_summary: bool           = True,
+    on_change:    Optional[Callable[[str, Any, Any], None]] = None,
+) -> _PatchContext:
+    
+    return _PatchContext(
+        obj,
+        label=label,
+        stream=stream,
+        show_types=show_types,
+        show_summary=show_summary,
+        on_change=on_change,
+    )
+
+
 
 if __name__ == "__main__":
     cls()
