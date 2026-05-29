@@ -1,6 +1,6 @@
 __version__ = "1.5.0"
 __author__ = "SuperDragon777"
-__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner", "password", "env", "run", "humanize", "tempdir", "lorem", "every", "saves", "patch"]
+__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner", "password", "env", "run", "humanize", "tempdir", "lorem", "every", "saves", "patch", "shutdown", "reboot", "hibernate", "lock_device", "cancel_shutdown"]
 
 import platform
 import sys
@@ -2484,7 +2484,198 @@ def patch(
         on_change=on_change,
     )
 
+def _power_delay_seconds(delay: Optional[float]) -> int:
+    if delay is None or delay <= 0:
+        return 0
+    return max(0, int(delay))
 
+
+def _power_run(cmd: list[str], *, shell: bool = False) -> bool:
+    try:
+        subprocess.run(
+            cmd,
+            check=False,
+            shell=shell,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return True
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def _power_shutdown_reboot(action: str, *, delay: Optional[float], force: bool) -> bool:
+    seconds = _power_delay_seconds(delay)
+    
+    def _windows() -> bool:
+        flag = "/s" if action == "shutdown" else "/r"
+        cmd: list[str] = ["shutdown", flag, "/t", str(seconds)]
+        if force:
+            cmd.append("/f")
+        return _power_run(cmd)
+    
+    def _unix_shutdown_cmd(reboot: bool) -> list[str]:
+        if shutil.which("systemctl"):
+            base = ["systemctl", "reboot" if reboot else "poweroff"]
+            if force:
+                base.append("--force")
+            if seconds > 0:
+                base = ["systemd-run", f"--on-active={seconds}s", "--timer-property=AccuracySec=1s"] + base
+            return base
+        when = "now" if seconds <= 0 else f"+{max(1, (seconds + 59) // 60)}"
+        cmd = ["shutdown", "-r" if reboot else "-h", when]
+        if force:
+            cmd.insert(1, "-f")
+        return cmd
+    
+    def _linux() -> bool:
+        return _power_run(_unix_shutdown_cmd(action == "reboot"))
+    
+    def _macos() -> bool:
+        if shutil.which("osascript") and seconds <= 0 and not force:
+            verb = "restart" if action == "reboot" else "shut down"
+            script = f'tell application "System Events" to {verb}'
+            return _power_run(["osascript", "-e", script])
+        return _power_run(_unix_shutdown_cmd(action == "reboot"))
+    
+    def _freebsd() -> bool:
+        when = "now" if seconds <= 0 else f"+{max(1, (seconds + 59) // 60)}"
+        cmd = ["shutdown", "-r" if action == "reboot" else "-p", when]
+        if force:
+            cmd.insert(1, "-f")
+        return _power_run(cmd)
+    
+    def _unsupported() -> bool:
+        return False
+    
+    return on_platform(
+        windows=_windows,
+        linux=_linux,
+        macos=_macos,
+        freebsd=_freebsd,
+        android=_unsupported,
+        ios=_unsupported,
+        default=_unsupported,
+    )
+
+
+def shutdown(*, delay: Optional[float] = None, force: bool = False) -> bool:
+    return _power_shutdown_reboot("shutdown", delay=delay, force=force)
+
+
+def reboot(*, delay: Optional[float] = None, force: bool = False) -> bool:
+    return _power_shutdown_reboot("reboot", delay=delay, force=force)
+
+
+def hibernate(*, force: bool = False) -> bool:
+    def _windows() -> bool:
+        cmd = ["shutdown", "/h"]
+        if force:
+            cmd.append("/f")
+        return _power_run(cmd)
+    
+    def _linux() -> bool:
+        if shutil.which("systemctl"):
+            cmd = ["systemctl", "hibernate"]
+            if force:
+                cmd.append("--force")
+            return _power_run(cmd)
+        for candidate in (["pm-hibernate"], ["systemctl", "hibernate"]):
+            if shutil.which(candidate[0]):
+                return _power_run(candidate)
+        return False
+    
+    def _macos() -> bool:
+        if shutil.which("pmset"):
+            return _power_run(["pmset", "sleepnow"])
+        return False
+    
+    def _freebsd() -> bool:
+        return _power_run(["zzz"])
+    
+    def _unsupported() -> bool:
+        return False
+    
+    return on_platform(
+        windows=_windows,
+        linux=_linux,
+        macos=_macos,
+        freebsd=_freebsd,
+        android=_unsupported,
+        ios=_unsupported,
+        default=_unsupported,
+    )
+
+
+def lock_device() -> bool:
+    def _windows() -> bool:
+        try:
+            import ctypes
+            ctypes.windll.user32.LockWorkStation()
+            return True
+        except Exception:
+            return _power_run(["rundll32.exe", "user32.dll,LockWorkStation"])
+        
+    def _linux() -> bool:
+        for cmd in (
+            ["loginctl", "lock-session"],
+            ["xdg-screensaver", "lock"],
+            ["gnome-screensaver-command", "-l"],
+            ["dm-tool", "lock"],
+            ["cinnamon-screensaver-command", "-l"],
+            ["mate-screensaver-command", "-l"],
+            ["i3lock"],
+            ["swaylock"],
+        ):
+            if shutil.which(cmd[0]):
+                return _power_run(cmd)
+        return False
+    
+    def _macos() -> bool:
+        cg = "/System/Library/CoreServices/Menu Extras/User.menu/Contents/Resources/CGSession"
+        if os.path.isfile(cg):
+            return _power_run([cg, "-suspend"])
+        return _power_run(["/usr/bin/open", "-a", "ScreenSaverEngine"])
+    
+    def _freebsd() -> bool:
+        if shutil.which("xdg-screensaver"):
+            return _power_run(["xdg-screensaver", "lock"])
+        return False
+    
+    def _unsupported() -> bool:
+        return False
+    
+    return on_platform(
+        windows=_windows,
+        linux=_linux,
+        macos=_macos,
+        freebsd=_freebsd,
+        android=_unsupported,
+        ios=_unsupported,
+        default=_unsupported,
+    )
+
+
+def cancel_shutdown() -> bool:
+    def _windows() -> bool:
+        return _power_run(["shutdown", "/a"])
+    
+    def _unix() -> bool:
+        return _power_run(["shutdown", "-c"])
+    
+    def _unsupported() -> bool:
+        return False
+    
+    return on_platform(
+        windows=_windows,
+        linux=_unix,
+        macos=_unix,
+        freebsd=_unix,
+        android=_unsupported,
+        ios=_unsupported,
+        default=_unsupported,
+    )
 
 if __name__ == "__main__":
     cls()
