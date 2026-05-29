@@ -1785,6 +1785,74 @@ def tempdir(suffix: str = "", prefix: str = "tmp", dir: str = None):
         log.debug(f"[tempdir] removed: {path}")
 
 class Lorem:
+    FIRST_NAMES_EN_MALE = [
+        "Alex", "Jordan", "Taylor", "Morgan", "Casey", "Riley", "Avery", "Quinn",
+        "Cameron", "Dakota", "Reese", "Skyler", "Emerson", "Finley", "Hayden",
+        "Peyton", "River", "Sawyer", "Phoenix", "Rowan", "John", "Michael", "David",
+        "James", "Robert", "William", "Christopher", "Daniel", "Matthew", "Anthony",
+        "Mark", "Donald", "Steven", "Andrew", "Paul", "Joshua", "Kenneth", "Kevin",
+        "Brian", "George", "Edward", "Ronald", "Timothy", "Jason", "Jeffrey", "Ryan",
+        "Jacob", "Gary", "Nicholas", "Eric", "Jonathan", "Stephen", "Larry", "Justin",
+        "Scott", "Brandon", "Benjamin", "Samuel", "Gregory", "Alexander", "Patrick",
+        "Frank", "Raymond", "Jack", "Dennis", "Jerry", "Tyler", "Aaron", "Jose", "Adam",
+        "Henry", "Nathan", "Douglas", "Zachary", "Peter", "Kyle", "Walter", "Ethan",
+        "Jeremy", "Harold", "Keith", "Christian", "Roger", "Noah", "Gerald", "Carl",
+        "Terry", "Sean", "Austin", "Arthur", "Lawrence", "Jesse", "Dylan", "Bryan",
+        "Joe", "Bruce", "Albert", "Willie", "Gabriel", "Logan", "Alan", "Juan", "Wayne",
+        "Roy", "Ralph", "Randy", "Eugene", "Louis", "Philip", "Bobby", "Johnny", "Russell",
+    ]
+
+    FIRST_NAMES_EN_FEMALE = [
+        "Alex", "Jordan", "Taylor", "Morgan", "Casey", "Riley", "Avery", "Quinn",
+        "Cameron", "Dakota", "Reese", "Skyler", "Emerson", "Finley", "Hayden",
+        "Peyton", "River", "Sawyer", "Phoenix", "Rowan", "Emma", "Olivia", "Isabella",
+        "Mia", "Charlotte", "Amelia", "Harper", "Evelyn", "Abigail", "Emily",
+        "Elizabeth", "Sofia", "Ella", "Madison", "Scarlett", "Grace", "Chloe",
+        "Victoria", "Layla", "Lily", "Aurora", "Zoey", "Penelope", "Hannah",
+        "Lillian", "Addison", "Lucy", "Nora",
+    ]
+
+    FIRST_NAMES_RU_MALE = [
+        "Иван", "Дмитрий", "Алексей", "Николай", "Сергей", "Владимир", "Пётр",
+        "Андрей", "Михаил", "Александр", "Павел", "Денис", "Роман", "Артём",
+    ]
+
+    FIRST_NAMES_RU_FEMALE = [
+        "Анна", "Елена", "Наташа", "Ольга", "Мария", "Татьяна", "Екатерина",
+        "Юля", "Виктория", "София", "Анастасия", "Ирина", "Светлана", "Дарья",
+    ]
+
+    LAST_NAMES_EN = [
+        "Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Miller",
+        "Davis", "Rodriguez", "Martinez", "Hernandez", "Lopez", "Gonzalez",
+        "Wilson", "Anderson", "Thomas", "Taylor", "Moore", "Jackson", "Martin",
+        "Lee", "Perez", "Thompson", "White", "Harris", "Sanchez", "Clark",
+        "Ramirez", "Lewis", "Robinson", "Walker", "Young", "Allen", "King",
+        "Wright", "Scott", "Torres", "Nguyen", "Hill", "Flores", "Green",
+        "Adams", "Nelson", "Baker", "Hall", "Rivera", "Campbell", "Mitchell",
+        "Carter", "Roberts", "Gomez", "Phillips", "Evans", "Turner", "Diaz",
+        "Parker", "Cruz", "Edwards", "Collins", "Reyes", "Stewart", "Morris",
+        "Morales", "Murphy", "Cook", "Rogers", "Gutierrez", "Ortiz", "Morgan",
+        "Cooper", "Peterson", "Bailey", "Reed", "Kelly", "Howard", "Ramos",
+        "Kim", "Cox", "Ward", "Richardson", "Watson", "Brooks", "Chavez",
+        "Wood", "James", "Bennett", "Gray", "Mendoza", "Ruiz", "Hughes",
+        "Price", "Alvarez", "Castillo", "Sanders", "Patel", "Myers", "Long",
+        "Ross", "Foster", "Jimenez",
+    ]
+
+    LAST_NAMES_RU_MALE = [
+        "Петров", "Иванов", "Смирнов", "Кузнецов", "Попов", "Соколов", "Лебедев",
+        "Козлов", "Новиков", "Морозов", "Волков", "Андреев", "Алексеев", "Фёдоров",
+        "Степанов", "Михайлов", "Орлов", "Николаев", "Романов", "Васильев"
+    ]
+
+    LAST_NAMES_RU_FEMALE = [
+        "Петрова", "Иванова", "Смирнова", "Кузнецова", "Попова", "Соколова",
+        "Лебедева", "Козлова", "Новикова", "Морозова", "Волкова", "Андреева",
+        "Алексеева", "Фёдорова", "Степанова", "Михайлова", "Орлова", "Николаева",
+        "Романова", "Васильева"
+    ]
+
     FIRST_NAMES = [
         "Alex", "Jordan", "Taylor", "Morgan", "Casey", "Riley", "Avery", "Quinn",
         "Cameron", "Dakota", "Reese", "Skyler", "Emerson", "Finley", "Hayden",
@@ -1882,9 +1950,64 @@ class Lorem:
         "Lincoln", "Jefferson", "Madison", "Jackson", "Monroe", "Adams",
     ]
 
-    def __init__(self, seed: Optional[int] = None):
+    def __init__(
+        self,
+        seed: Optional[int] = None,
+        gender: Optional[str] = None,
+        locale: Optional[str] = None,
+    ):
         if seed is not None:
             random.seed(seed)
+        self._gender = self._normalize_gender(gender) if gender is not None else None
+        self._locale = self._normalize_locale(locale) if locale is not None else None
+
+    def _normalize_gender(self, gender: str) -> str:
+        value = gender.lower()
+        if value in ("m", "male", "man"):
+            return "male"
+        if value in ("f", "female", "woman"):
+            return "female"
+        raise ValueError("gender must be 'male' or 'female'")
+
+    def _normalize_locale(self, locale: str) -> str:
+        value = locale.lower()
+        if value in ("en", "english", "eng"):
+            return "en"
+        if value in ("ru", "russian", "rus"):
+            return "ru"
+        raise ValueError("locale must be 'en' or 'ru'")
+
+    def _resolve_gender(self, gender: Optional[str] = None) -> Optional[str]:
+        if gender is not None:
+            return self._normalize_gender(gender)
+        return self._gender
+
+    def _resolve_locale(self, locale: Optional[str] = None) -> Optional[str]:
+        if locale is not None:
+            return self._normalize_locale(locale)
+        return self._locale
+
+    def _pick_gender(self, gender: Optional[str] = None) -> str:
+        resolved = self._resolve_gender(gender)
+        if resolved is not None:
+            return resolved
+        return random.choice(["male", "female"])
+
+    def _pick_locale(self, locale: Optional[str] = None) -> str:
+        resolved = self._resolve_locale(locale)
+        if resolved is not None:
+            return resolved
+        return random.choice(["en", "ru"])
+
+    def _first_name_pool(self, gender: str, locale: str) -> list:
+        if locale == "en":
+            return self.FIRST_NAMES_EN_MALE if gender == "male" else self.FIRST_NAMES_EN_FEMALE
+        return self.FIRST_NAMES_RU_MALE if gender == "male" else self.FIRST_NAMES_RU_FEMALE
+
+    def _last_name_pool(self, gender: str, locale: str) -> list:
+        if locale == "en":
+            return self.LAST_NAMES_EN
+        return self.LAST_NAMES_RU_MALE if gender == "male" else self.LAST_NAMES_RU_FEMALE
 
     def words(self, count: int = 10) -> str:
         return " ".join(random.choice(self.LOREM_WORDS) for _ in range(count))
@@ -1904,18 +2027,43 @@ class Lorem:
     def paragraphs(self, count: int = 3) -> str:
         return "\n\n".join(self.paragraph(random.randint(3, 6)) for _ in range(count))
 
-    def name(self) -> str:
-        return f"{random.choice(self.FIRST_NAMES)} {random.choice(self.LAST_NAMES)}"
+    def name(self, gender: Optional[str] = None, locale: Optional[str] = None) -> str:
+        if self._resolve_gender(gender) is None and self._resolve_locale(locale) is None:
+            return f"{random.choice(self.FIRST_NAMES)} {random.choice(self.LAST_NAMES)}"
+        picked_gender = self._pick_gender(gender)
+        picked_locale = self._pick_locale(locale)
+        first = random.choice(self._first_name_pool(picked_gender, picked_locale))
+        last = random.choice(self._last_name_pool(picked_gender, picked_locale))
+        return f"{first} {last}"
 
-    def first_name(self) -> str:
-        return random.choice(self.FIRST_NAMES)
+    def first_name(self, gender: Optional[str] = None, locale: Optional[str] = None) -> str:
+        if self._resolve_gender(gender) is None and self._resolve_locale(locale) is None:
+            return random.choice(self.FIRST_NAMES)
+        picked_gender = self._pick_gender(gender)
+        picked_locale = self._pick_locale(locale)
+        return random.choice(self._first_name_pool(picked_gender, picked_locale))
 
-    def last_name(self) -> str:
-        return random.choice(self.LAST_NAMES)
+    def last_name(self, gender: Optional[str] = None, locale: Optional[str] = None) -> str:
+        if self._resolve_gender(gender) is None and self._resolve_locale(locale) is None:
+            return random.choice(self.LAST_NAMES)
+        picked_gender = self._pick_gender(gender)
+        picked_locale = self._pick_locale(locale)
+        return random.choice(self._last_name_pool(picked_gender, picked_locale))
 
-    def email(self, domain: Optional[str] = None) -> str:
-        first = random.choice(self.FIRST_NAMES).lower()
-        last = random.choice(self.LAST_NAMES).lower()
+    def email(
+        self,
+        domain: Optional[str] = None,
+        gender: Optional[str] = None,
+        locale: Optional[str] = None,
+    ) -> str:
+        if self._resolve_gender(gender) is None and self._resolve_locale(locale) is None:
+            first = random.choice(self.FIRST_NAMES).lower()
+            last = random.choice(self.LAST_NAMES).lower()
+        else:
+            picked_gender = self._pick_gender(gender)
+            picked_locale = self._pick_locale(locale)
+            first = random.choice(self._first_name_pool(picked_gender, picked_locale)).lower()
+            last = random.choice(self._last_name_pool(picked_gender, picked_locale)).lower()
         num = random.randint(1, 999)
         email_domain = domain or random.choice(self.DOMAINS)
         variants = [
