@@ -2851,6 +2851,21 @@ def cancel_shutdown() -> bool:
         default=_unsupported,
     )
 
+def is_admin() -> bool:
+    system = platform.system()
+    
+    if system == "Windows":
+        try:
+            import ctypes
+            return ctypes.windll.shell32.IsUserAnAdmin() != 0
+        except Exception:
+            return False
+    else:
+        try:
+            return os.geteuid() == 0
+        except AttributeError:
+            return False
+
 if __name__ == "__main__":
     cls()
     print(ColorSystem().info("Tooly v{}".format(__version__)))
