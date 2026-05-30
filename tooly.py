@@ -582,18 +582,19 @@ def menu(
     loop: bool = True,
     show_hint: bool = True,
     input_mode: str = "arrows",
+    clear: bool = True,
 ) -> str | None:
     if not items:
         raise ValueError("menu() requires at least one item")
     if input_mode not in ("arrows", "digits"):
         raise ValueError("input_mode must be 'arrows' or 'digits'")
-
     colors = ColorSystem()
     idx = 0
     n = len(items)
 
     def _draw():
-        cls()
+        if clear:
+            cls()
         if title:
             print(colors.bold(title))
         pad_width = len(str(n))
@@ -672,7 +673,8 @@ def menu(
     except KeyboardInterrupt:
         result = None
 
-    cls()
+    if clear:
+        cls()
     return result
 
 
