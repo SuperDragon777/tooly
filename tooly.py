@@ -1,6 +1,6 @@
 __version__ = "1.5.0"
 __author__ = "SuperDragon777"
-__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner", "password", "env", "run", "humanize", "tempdir", "lorem", "every", "saves", "patch", "shutdown", "reboot", "hibernate", "lock_device", "cancel_shutdown", "is_admin", "pkill", "plist", "hwid"]
+__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner", "password", "env", "run", "humanize", "tempdir", "lorem", "every", "saves", "patch", "shutdown", "reboot", "hibernate", "lock_device", "cancel_shutdown", "is_admin", "pkill", "plist", "hwid", "music"]
 
 import platform
 import sys
@@ -3122,6 +3122,186 @@ def hwid(*, stable: bool = True) -> str:
     
     combined = "|".join(sorted(raw_parts) if not stable else raw_parts)
     return hashlib.sha256(combined.encode()).hexdigest().upper()
+
+class _MusicManager:
+    def __init__(self):
+        self._thread: Optional[threading.Thread] = None
+        self._stop_event = threading.Event()
+        self._pause_event = threading.Event()
+        self._lock = threading.Lock()
+        self._current: Optional[str] = None
+        self._volume: float = 1.0
+        self._player_proc: Optional[subprocess.Popen] = None
+        self._on_end: Optional[Callable] = None
+    
+    def _resolve_backend(self) -> Optional[str]:
+        for cmd in ("ffplay", "mpv", "mplayer", "afplay", "cvlc"):
+            if shutil.which(cmd):
+                return cmd
+        return None
+
+    def _build_cmd(self, backend: str, track: str) -> list[str]:
+        vol = int(self._volume * 100)
+        if backend == "ffplay":
+            return ["ffplay", "-nodisp", "-autoexit", "-volume", str(vol), track]
+        elif backend == "mpv":
+            return ["mpv", "--no-video", f"--volume={vol}", track]
+        elif backend == "mplayer":
+            return ["mplayer", "-vo", "null", "-volume", str(vol), track]
+        elif backend == "afplay":
+            return ["afplay", "-v", str(self._volume), track]
+        elif backend == "cvlc":
+            return ["cvlc", "--intf", "dummy", "--gain", str(self._volume), track, "vlc://quit"]
+        return []
+    
+    def _run(self, track: str, loop: bool):
+        backend = self._resolve_backend()
+        if backend is None:
+            log.error("music: no supported backend found (ffplay, mpv, mplayer, afplay, cvlc)")
+            return
+        
+        self._stop_event.clear()
+        self._pause_event.clear()
+        
+        while True:
+            cmd = self._build_cmd(backend, track)
+            try:
+                with self._lock:
+                    self._player_proc = subprocess.Popen(
+                        cmd,
+                        stdin=subprocess.DEVNULL,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                    )
+                while True:
+                    if self._stop_event.is_set():
+                        with self._lock:
+                            if self._player_proc:
+                                self._player_proc.terminate()
+                                self._player_proc = None
+                        return
+                    if self._pause_event.is_set():
+                        with self._lock:
+                            if self._player_proc:
+                                self._player_proc.terminate()
+                        while self._pause_event.is_set():
+                            if self._stop_event.is_set():
+                                return
+                            time.sleep(0.1)
+                        if self._stop_event.is_set():
+                            return
+                        with self._lock:
+                            self._player_proc = subprocess.Popen(
+                                cmd,
+                                stdin=subprocess.DEVNULL,
+                                stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL,
+                            )
+                        continue
+                    ret = self._player_proc.poll()
+                    if ret is not None:
+                        break
+                    time.sleep(0.1)
+            except Exception as e:
+                log.error(f"music: playback error: {e}")
+                return
+            
+            if self._stop_event.is_set():
+                return
+            if not loop:
+                break
+            
+        if self._on_end:
+            try:
+                self._on_end()
+            except Exception:
+                pass
+    
+    def play(
+        self,
+        track: str,
+        *,
+        loop: bool = False,
+        on_end: Optional[Callable] = None,
+    ) -> None:
+        self.stop()
+        self._current = track
+        self._on_end = on_end
+        self._thread = threading.Thread(target=self._run, args=(track, loop), daemon=True)
+        self._thread.start()
+    
+    def stop(self) -> None:
+        self._stop_event.set()
+        with self._lock:
+            if self._player_proc:
+                try:
+                    self._player_proc.terminate()
+                except Exception:
+                    pass
+                self._player_proc = None
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=2.0)
+        self._thread = None
+        self._current = None
+    
+    def pause(self) -> None:
+        if not self.is_playing:
+            return
+        self._pause_event.set()
+    
+    def resume(self) -> None:
+        if not self.is_paused:
+            return
+        self._pause_event.clear()
+    
+    def toggle(self) -> None:
+        if self.is_paused:
+            self.resume()
+        else:
+            self.pause()
+    
+    def volume(self, level: float) -> None:
+        if not 0.0 <= level <= 1.0:
+            raise ValueError("volume must be between 0.0 and 1.0")
+        self._volume = level
+        if self.is_playing and self._current:
+            track = self._current
+            self.play(track)
+    
+    @property
+    def is_playing(self) -> bool:
+        return (
+            self._thread is not None
+            and self._thread.is_alive()
+            and not self._pause_event.is_set()
+            and not self._stop_event.is_set()
+        )
+    
+    @property
+    def is_paused(self) -> bool:
+        return (
+            self._thread is not None
+            and self._thread.is_alive()
+            and self._pause_event.is_set()
+        )
+    
+    @property
+    def current(self) -> Optional[str]:
+        return self._current
+    
+    def info(self) -> dict:
+        return {
+            "current": self._current,
+            "is_playing": self.is_playing,
+            "is_paused": self.is_paused,
+            "volume": self._volume,
+        }
+    
+    def wait(self) -> None:
+        if self._thread and self._thread.is_alive():
+            self._thread.join()
+
+music = _MusicManager()
 
 if __name__ == "__main__":
     cls()
