@@ -1,6 +1,6 @@
 __version__ = "1.5.0"
 __author__ = "SuperDragon777"
-__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner", "password", "env", "run", "humanize", "tempdir", "lorem", "every", "saves", "patch", "shutdown", "reboot", "hibernate", "lock_device", "cancel_shutdown", "is_admin", "pkill", "plist", "hwid", "music"]
+__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner", "password", "env", "run", "humanize", "tempdir", "lorem", "every", "saves", "patch", "shutdown", "reboot", "hibernate", "lock_device", "cancel_shutdown", "is_admin", "pkill", "plist", "hwid", "music", "download"]
 
 import platform
 import sys
@@ -25,6 +25,8 @@ import json
 import hashlib
 import glob
 import pickle
+import urllib.request
+import urllib.parse
 
 try:
     import tty as _tty
@@ -3302,6 +3304,143 @@ class _MusicManager:
             self._thread.join()
 
 music = _MusicManager()
+@dataclass
+class DownloadResult:
+    success: bool
+    path: Optional[str] = None
+    url: str = ""
+    size: int = 0
+    elapsed: float = 0.0
+    error: Optional[str] = None
+    
+    def __bool__(self):
+        return self.success
+
+def download(
+    url: str,
+    dest: Optional[str] = None,
+    *,
+    filename: Optional[str] = None,
+    overwrite: bool = False,
+    timeout: float = 30.0,
+    retries: int = 3,
+    progress: bool = True,
+    chunk_size: int = 1024 * 8,
+    headers: Optional[dict] = None,
+    on_progress: Optional[Callable[[int, int], None]] = None,
+) -> DownloadResult:
+    colors = ColorSystem()
+    start = time.perf_counter()
+    
+    if dest is None:
+        dest = os.getcwd()
+    
+    if filename is None:
+        parsed = urllib.parse.urlparse(url)
+        filename = os.path.basename(parsed.path) or "download"
+    
+    os.makedirs(dest, exist_ok=True)
+    out_path = os.path.join(dest, filename)
+    
+    if not overwrite and os.path.isfile(out_path):
+        log.warn(f"download: file already exists: {out_path}")
+        return DownloadResult(
+            success=False,
+            path=out_path,
+            url=url,
+            error="File already exists. Use overwrite=True.",
+        )
+    
+    last_error: Optional[str] = None
+    
+    for attempt in range(1, retries + 1):
+        try:
+            req = urllib.request.Request(url, headers=headers or {})
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                total = int(resp.headers.get("Content-Length", 0))
+                downloaded = 0
+                
+                label = filename if len(filename) <= 30 else filename[:27] + "..."
+                
+                with open(out_path, "wb") as f:
+                    while True:
+                        chunk = resp.read(chunk_size)
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        
+                        if on_progress:
+                            try:
+                                on_progress(downloaded, total)
+                            except Exception:
+                                pass
+                        
+                        if progress and sys.stdout.isatty():
+                            if total:
+                                pct = downloaded / total
+                                width = 28
+                                filled = int(width * pct)
+                                bar = "█" * filled + "░" * (width - filled)
+                                speed_label = _humanize_bytes(
+                                    downloaded / max(time.perf_counter() - start, 0.001)
+                                ) + "/s"
+                                sys.stdout.write(
+                                    f"\r{colors.blue(label)} |{bar}| "
+                                    f"{pct*100:5.1f}% "
+                                    f"{_humanize_bytes(downloaded)}/{_humanize_bytes(total)} "
+                                    f"{colors.grey(speed_label)}\033[K"
+                                )
+                            else:
+                                sys.stdout.write(
+                                    f"\r{colors.blue(label)} "
+                                    f"{_humanize_bytes(downloaded)} "
+                                    f"{colors.grey('...')}\033[K"
+                                )
+                            sys.stdout.flush()
+            
+            if progress and sys.stdout.isatty():
+                sys.stdout.write("\n")
+                sys.stdout.flush()
+            
+            elapsed = time.perf_counter() - start
+            size = os.path.getsize(out_path)
+            
+            log.success(
+                f"downloaded '{filename}' -> {out_path} "
+                f"({_humanize_bytes(size)}, {_format_duration(elapsed)})"
+            )
+            
+            return DownloadResult(
+                success=True,
+                path=out_path,
+                url=url,
+                size=size,
+                elapsed=elapsed,
+            )
+        
+        except Exception as e:
+            last_error = str(e)
+            if progress and sys.stdout.isatty():
+                sys.stdout.write("\n")
+                sys.stdout.flush()
+            if attempt < retries:
+                log("RTY", f"download attempt {attempt}/{retries} failed: {e} - retrying", color="yellow")
+                time.sleep(1.5 * attempt)
+            else:
+                log.error(f"download failed after {retries} attempt(s): {e}")
+    
+    if os.path.isfile(out_path):
+        try:
+            os.remove(out_path)
+        except Exception:
+            pass
+    
+    return DownloadResult(
+        success=False,
+        url=url,
+        error=last_error,
+    )
 
 if __name__ == "__main__":
     cls()
