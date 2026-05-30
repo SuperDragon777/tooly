@@ -2962,6 +2962,54 @@ def plist(
     
     return result
 
+def uptime() -> float:
+    system = platform.system()
+    
+    if system == "Windows":
+        try:
+            import ctypes
+            kernel32 = ctypes.windll.kernel32
+            GetTickCount64 = kernel32.GetTickCount64
+            GetTickCount64.restype = ctypes.c_ulonglong
+            return GetTickCount64() / 1000.0
+        except Exception:
+            try:
+                output = subprocess.check_output(
+                    ["wmic", "os", "get", "lastbootuptime"],
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace"
+                )
+                lines = output.strip().split("\n")
+                if len(lines) >= 2:
+                    boot_str = lines[1].strip().split(".")[0]
+                    from datetime import datetime
+                    boot_time = datetime.strptime(boot_str, "%Y%m%d%H%M%S")
+                    return (datetime.now() - boot_time).total_seconds()
+            except Exception:
+                pass
+            return -1
+    else:
+        try:
+            with open("/proc/uptime", "r") as f:
+                return float(f.read().split()[0])
+        except Exception:
+            try:
+                output = subprocess.check_output(
+                    ["sysctl", "-n", "kern.boottime"],
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace"
+                )
+                import re
+                match = re.search(r"sec = (\d+)", output)
+                if match:
+                    boot_time = int(match.group(1))
+                    return time.time() - boot_time
+            except Exception:
+                pass
+            return -1
+
 if __name__ == "__main__":
     cls()
     print(ColorSystem().info("Tooly v{}".format(__version__)))
