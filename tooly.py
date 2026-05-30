@@ -1,6 +1,6 @@
 __version__ = "1.5.0"
 __author__ = "SuperDragon777"
-__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner", "password", "env", "run", "humanize", "tempdir", "lorem", "every", "saves", "patch", "shutdown", "reboot", "hibernate", "lock_device", "cancel_shutdown", "is_admin", "pkill", "plist", "hwid", "music", "download"]
+__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner", "password", "env", "run", "humanize", "tempdir", "lorem", "every", "saves", "patch", "shutdown", "reboot", "hibernate", "lock_device", "cancel_shutdown", "is_admin", "pkill", "plist", "hwid", "music", "download", "ensure_package", "package_version"]
 
 import platform
 import sys
@@ -3441,6 +3441,102 @@ def download(
         url=url,
         error=last_error,
     )
+
+@dataclass
+class PackageInfo:
+    name: str
+    installed: bool
+    version: Optional[str] = None
+    error: Optional[str] = None
+    
+    def __bool__(self):
+        return self.installed
+
+def package_version(name: str) -> Optional[str]:
+    try:
+        import importlib.metadata
+        return importlib.metadata.version(name)
+    except Exception:
+        pass
+    try:
+        out = subprocess.check_output(
+            [sys.executable, "-m", "pip", "show", name],
+            text=True, encoding="utf-8", errors="replace",
+            stdin=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        for line in out.splitlines():
+            if line.lower().startswith("version:"):
+                return line.split(":", 1)[1].strip()
+    except Exception:
+        pass
+    return None
+
+def ensure_package(
+    name: str,
+    *,
+    version: Optional[str] = None,
+    upgrade: bool = False,
+    index_url: Optional[str] = None,
+    quiet: bool = False,
+    import_name: Optional[str] = None,
+) -> PackageInfo:
+    install_name = name if version is None else f"{name}=={version}"
+    check_name = import_name or name
+    
+    current = package_version(name)
+    
+    if current is not None and not upgrade:
+        if version is None or current == version:
+            if not quiet:
+                log.success(f"package '{name}' already installed ({current})")
+            return PackageInfo(name=name, installed=True, version=current)
+    
+    action = "Upgrading" if upgrade and current else "Installing"
+    if not quiet:
+        log(
+            "PKG",
+            f"{action} '{install_name}'...",
+            color="blue",
+        )
+    
+    cmd = [sys.executable, "-m", "pip", "install", install_name, "--break-system-packages"]
+    if upgrade:
+        cmd.append("--upgrade")
+    if index_url:
+        cmd += ["--index-url", index_url]
+    if quiet:
+        cmd.append("-q")
+    
+    try:
+        result = subprocess.run(
+            cmd,
+            text=True, encoding="utf-8", errors="replace",
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+    
+        if result.returncode != 0:
+            err = result.stderr.strip().splitlines()[-1] if result.stderr.strip() else "unknown error"
+            log.error(f"ensure_package: failed to install '{name}': {err}")
+            return PackageInfo(name=name, installed=False, error=err)
+        
+        new_version = package_version(name)
+        
+        try:
+            import importlib
+            importlib.import_module(check_name)
+        except ImportError:
+            pass
+        
+        if not quiet:
+            log.success(f"'{name}' installed successfully ({new_version})")
+        
+        return PackageInfo(name=name, installed=True, version=new_version)
+    
+    except Exception as e:
+        log.error(f"ensure_package: unexpected error: {e}")
+        return PackageInfo(name=name, installed=False, error=str(e))
 
 if __name__ == "__main__":
     cls()
