@@ -1,6 +1,6 @@
 __version__ = "1.5.0"
 __author__ = "SuperDragon777"
-__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner", "password", "env", "run", "humanize", "tempdir", "lorem", "every", "saves", "patch", "shutdown", "reboot", "hibernate", "lock_device", "cancel_shutdown"]
+__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner", "password", "env", "run", "humanize", "tempdir", "lorem", "every", "saves", "patch", "shutdown", "reboot", "hibernate", "lock_device", "cancel_shutdown", "is_admin", "pkill", "plist"]
 
 import platform
 import sys
@@ -2865,6 +2865,102 @@ def is_admin() -> bool:
             return os.geteuid() == 0
         except AttributeError:
             return False
+
+def pkill(
+    name: Optional[str] = None,
+    pid: Optional[int] = None,
+    *,
+    force: bool = False,
+    signal: int = 15,
+) -> bool:
+    if name is None and pid is None:
+        raise ValueError("Either 'name' or 'pid' must be provided")
+    
+    system = platform.system()
+    
+    if pid is not None:
+        try:
+            os.kill(pid, signal if not force else 9)
+            return True
+        except (ProcessLookupError, PermissionError, OSError):
+            return False
+    
+    if system == "Windows":
+        if force:
+            return _power_run(["taskkill", "/F", "/IM", name])
+        return _power_run(["taskkill", "/IM", name])
+    else:
+        sig = "-9" if force else f"-{signal}"
+        return _power_run(["pkill", sig, name])
+
+def plist(
+    name: Optional[str] = None,
+    pid: Optional[int] = None,
+) -> List[Dict[str, Union[str, int]]]:
+    result: List[Dict[str, Union[str, int]]] = []
+    system = platform.system()
+    
+    if system == "Windows":
+        try:
+            output = subprocess.check_output(
+                ["tasklist", "/FO", "CSV", "/NH"],
+                text=True,
+                encoding="utf-8",
+                errors="replace"
+            )
+            for line in output.strip().split("\n"):
+                if not line.strip():
+                    continue
+                parts = line.strip('"').split('","')
+                if len(parts) >= 2:
+                    proc_name = parts[0]
+                    proc_pid = int(parts[1])
+                    if pid is not None and proc_pid != pid:
+                        continue
+                    if name is not None and name.lower() not in proc_name.lower():
+                        continue
+                    result.append({"name": proc_name, "pid": proc_pid})
+        except (subprocess.SubprocessError, ValueError, IndexError):
+            pass
+    else:
+        try:
+            import glob
+            for pid_path in glob.glob("/proc/[0-9]*/comm"):
+                try:
+                    proc_pid = int(pid_path.split("/")[2])
+                    with open(pid_path, "r") as f:
+                        proc_name = f.read().strip()
+                    if pid is not None and proc_pid != pid:
+                        continue
+                    if name is not None and name != proc_name:
+                        continue
+                    result.append({"name": proc_name, "pid": proc_pid})
+                except (OSError, ValueError, IOError):
+                    continue
+        except Exception:
+            try:
+                output = subprocess.check_output(
+                    ["ps", "-e", "-o", "pid=,comm="],
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace"
+                )
+                for line in output.strip().split("\n"):
+                    if not line.strip():
+                        continue
+                    parts = line.strip().split(None, 1)
+                    if len(parts) == 2:
+                        proc_pid = int(parts[0])
+                        proc_name = parts[1]
+                        if pid is not None and proc_pid != pid:
+                            continue
+                        if name is not None and name != proc_name:
+                            continue
+                        result.append({"name": proc_name, "pid": proc_pid})
+            except (subprocess.SubprocessError, ValueError):
+                pass
+    
+    return result
 
 if __name__ == "__main__":
     cls()
