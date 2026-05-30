@@ -1,13 +1,13 @@
 __version__ = "1.5.0"
 __author__ = "SuperDragon777"
-__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner", "password", "env", "run", "humanize", "tempdir", "lorem", "every", "saves", "patch", "shutdown", "reboot", "hibernate", "lock_device", "cancel_shutdown", "is_admin", "pkill", "plist"]
+__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner", "password", "env", "run", "humanize", "tempdir", "lorem", "every", "saves", "patch", "shutdown", "reboot", "hibernate", "lock_device", "cancel_shutdown", "is_admin", "pkill", "plist", "hwid"]
 
 import platform
 import sys
 import os
 import time
 from contextlib import contextmanager
-from typing import Callable, Optional, Any, Iterable, TypeVar, Iterator, Union, overload, List, Dict, Set
+from typing import Callable, Optional, Any, Iterable, TypeVar, Iterator, Union, overload, List, Dict
 import difflib
 from enum import Enum
 import threading
@@ -22,6 +22,9 @@ from dataclasses import dataclass, field
 import tempfile
 import shutil
 import json
+import hashlib
+import glob
+import pickle
 
 try:
     import tty as _tty
@@ -2337,7 +2340,6 @@ class _SavesManager:
         try:
             if fmt == "pickle":
                 with open(file_path, "wb") as f:
-                    import pickle
                     pickle.dump(data, f)
             elif fmt == "json":
                 with open(file_path, "w", encoding="utf-8") as f:
@@ -2365,7 +2367,6 @@ class _SavesManager:
         try:
             if fmt == "pickle":
                 with open(file_path, "rb") as f:
-                    import pickle
                     return pickle.load(f)
             else:
                 with open(file_path, "r", encoding="utf-8") as f:
@@ -2924,7 +2925,6 @@ def plist(
             pass
     else:
         try:
-            import glob
             for pid_path in glob.glob("/proc/[0-9]*/comm"):
                 try:
                     proc_pid = int(pid_path.split("/")[2])
@@ -2983,7 +2983,6 @@ def uptime() -> float:
                 lines = output.strip().split("\n")
                 if len(lines) >= 2:
                     boot_str = lines[1].strip().split(".")[0]
-                    from datetime import datetime
                     boot_time = datetime.strptime(boot_str, "%Y%m%d%H%M%S")
                     return (datetime.now() - boot_time).total_seconds()
             except Exception:
@@ -3001,7 +3000,6 @@ def uptime() -> float:
                     encoding="utf-8",
                     errors="replace"
                 )
-                import re
                 match = re.search(r"sec = (\d+)", output)
                 if match:
                     boot_time = int(match.group(1))
@@ -3009,6 +3007,121 @@ def uptime() -> float:
             except Exception:
                 pass
             return -1
+
+def hwid(*, stable: bool = True) -> str:
+    def _get_windows() -> list[str]:
+        parts = []
+        queries = [
+            ("wmic", "csproduct", "get", "uuid"),
+            ("wmic", "cpu", "get", "processorid"),
+            ("wmic", "diskdrive", "get", "serialnumber"),
+            ("wmic", "baseboard", "get", "serialnumber"),
+        ]
+        for cmd in queries:
+            try:
+                out = subprocess.check_output(
+                    cmd, text=True, encoding="utf-8", errors="replace",
+                    stdin=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                )
+                lines = [l.strip() for l in out.strip().split("\n")
+                        if l.strip() and not l.strip().lower().startswith(cmd[-1].split("get")[-1].strip().lower())]
+                if lines:
+                    parts.append(lines[0])
+            except Exception:
+                pass
+        return parts
+    
+    def _get_linux() -> list[str]:
+        parts = []
+        files = [
+            "/etc/machine-id",
+            "/var/lib/dbus/machine-id",
+            "/sys/class/dmi/id/product_uuid",
+            "/sys/class/dmi/id/board_serial",
+            "/sys/class/dmi/id/product_serial",
+        ]
+        for path in files:
+            try:
+                with open(path, "r") as f:
+                    val = f.read().strip()
+                    if val:
+                        parts.append(val)
+            except Exception:
+                pass
+        try:
+            out = subprocess.check_output(
+                ["blkid", "-s", "UUID", "-o", "value"],
+                text=True, encoding="utf-8", errors="replace",
+                stdin=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+            uuids = [l.strip() for l in out.strip().split("\n") if l.strip()]
+            parts.extend(sorted(uuids)[:3])
+        except Exception:
+            pass
+        return parts
+    
+    def _get_macos() -> list[str]:
+        parts = []
+        try:
+            out = subprocess.check_output(
+                ["ioreg", "-rd1", "-c", "IOPlatformExpertDevice"],
+                text=True, encoding="utf-8", errors="replace",
+                stdin=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+            for key in ("IOPlatformUUID", "IOPlatformSerialNumber"):
+                match = re.search(rf'"{key}"\s*=\s*"([^"]+)"', out)
+                if match:
+                    parts.append(match.group(1))
+        except Exception:
+            pass
+        try:
+            out = subprocess.check_output(
+                ["system_profiler", "SPHardwareDataType"],
+                text=True, encoding="utf-8", errors="replace",
+                stdin=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            )
+            for pattern in (r"Serial Number[^:]*:\s*(\S+)", r"Hardware UUID[^:]*:\s*(\S+)"):
+                match = re.search(pattern, out)
+                if match:
+                    parts.append(match.group(1))
+        except Exception:
+            pass
+        return parts
+    
+    def _get_freebsd() -> list[str]:
+        parts = []
+        for key in ("smbios.system.uuid", "smbios.system.serial", "smbios.baseboard.serial"):
+            try:
+                out = subprocess.check_output(
+                    ["kenv", key], text=True, encoding="utf-8", errors="replace",
+                    stdin=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                )
+                val = out.strip()
+                if val:
+                    parts.append(val)
+            except Exception:
+                pass
+        return parts
+    
+    def _default() -> list[str]:
+        return []
+    
+    raw_parts: list[str] = on_platform(
+        windows=_get_windows,
+        linux=_get_linux,
+        macos=_get_macos,
+        freebsd=_get_freebsd,
+        default=_default,
+    )
+    
+    raw_parts = [p for p in raw_parts if p]
+    
+    if stable and not raw_parts:
+        seed = platform.node() + platform.machine() + platform.processor()
+        raw_parts = [seed]
+    
+    combined = "|".join(sorted(raw_parts) if not stable else raw_parts)
+    return hashlib.sha256(combined.encode()).hexdigest().upper()
 
 if __name__ == "__main__":
     cls()
