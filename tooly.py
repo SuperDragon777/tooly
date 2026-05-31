@@ -27,6 +27,9 @@ import glob
 import pickle
 import urllib.request
 import urllib.parse
+import keyword as _keyword
+import tokenize as _tokenize
+import io as _io
 
 try:
     import tty as _tty
@@ -65,47 +68,73 @@ class ColorSystem:
             return text
         return f"\033[{color_code}m{text}\033[0m"
     
-    def red(self, text):
-        return self._colorize(text, "91")
+    def red(self, text):           return self._colorize(text, "91")
+    def green(self, text):         return self._colorize(text, "92")
+    def yellow(self, text):        return self._colorize(text, "93")
+    def blue(self, text):          return self._colorize(text, "94")
+    def magenta(self, text):       return self._colorize(text, "95")
+    def cyan(self, text):          return self._colorize(text, "96")
+    def white(self, text):         return self._colorize(text, "97")
+    def grey(self, text):          return self._colorize(text, "90")
+    def black(self, text):         return self._colorize(text, "30")
     
-    def green(self, text):
-        return self._colorize(text, "92")
+    def dark_red(self, text):      return self._colorize(text, "31")
+    def dark_green(self, text):    return self._colorize(text, "32")
+    def dark_yellow(self, text):   return self._colorize(text, "33")
+    def dark_blue(self, text):     return self._colorize(text, "34")
+    def dark_magenta(self, text):  return self._colorize(text, "35")
+    def dark_cyan(self, text):     return self._colorize(text, "36")
     
-    def yellow(self, text):
-        return self._colorize(text, "93")
+    def bold(self, text):          return self._colorize(text, "1")
+    def dim(self, text):           return self._colorize(text, "2")
+    def italic(self, text):        return self._colorize(text, "3")
+    def underline(self, text):     return self._colorize(text, "4")
+    def blink(self, text):         return self._colorize(text, "5")
+    def inverse(self, text):       return self._colorize(text, "7")
+    def strikethrough(self, text): return self._colorize(text, "9")
     
-    def blue(self, text):
-        return self._colorize(text, "94")
-    
-    def grey(self, text):
-        return self._colorize(text, "90")
-    
-    def bold(self, text):
-        return self._colorize(text, "1")
-    
-    def dim(self, text):
-        return self._colorize(text, "2")
-    
-    def bg_blue(self, text):
-        return self._colorize(text, "44")
+    def bg_black(self, text):      return self._colorize(text, "40")
+    def bg_red(self, text):        return self._colorize(text, "41")
+    def bg_green(self, text):      return self._colorize(text, "42")
+    def bg_yellow(self, text):     return self._colorize(text, "43")
+    def bg_blue(self, text):       return self._colorize(text, "44")
+    def bg_magenta(self, text):    return self._colorize(text, "45")
+    def bg_cyan(self, text):       return self._colorize(text, "46")
+    def bg_white(self, text):      return self._colorize(text, "47")
+    def bg_grey(self, text):       return self._colorize(text, "100")
     
     def bg_color(self, text, bg_code: str, fg_code: str = "97"):
         if not self.support_colors:
             return text
         return f"\033[{bg_code};{fg_code}m{text}\033[0m"
     
-    def success(self, text):
-        return self.green(f"[✓] {text}")
+    def color256(self, text: str, code: str) -> str:
+        if not self.support_colors:
+            return text
+        return f"\033[38;5;{code}m{text}\033[0m"
     
-    def error(self, text):
-        return self.red(f"[X] {text}")
+    def bg_color256(self, text: str, code: str) -> str:
+        if not self.support_colors:
+            return text
+        return f"\033[48;5;{code}m{text}\033[0m"
     
-    def warning(self, text):
-        return self.yellow(f"[!] {text}")
+    def rgb(self, text: str, r: int, g: int, b: int) -> str:
+        if not self.support_colors:
+            return text
+        return f"\033[38;2;{r};{g};{b}m{text}\033[0m"
     
-    def info(self, text):
-        return self.blue(f"[i] {text}")
-        
+    def bg_rgb(self, text: str, r: int, g: int, b: int) -> str:
+        if not self.support_colors:
+            return text
+        return f"\033[48;2;{r};{g};{b}m{text}\033[0m"
+    
+    def success(self, text):   return self.green(f"[✓] {text}")
+    def error(self, text):     return self.red(f"[X] {text}")
+    def warning(self, text):   return self.yellow(f"[!] {text}")
+    def info(self, text):      return self.blue(f"[i] {text}")
+    def debug(self, text):     return self.grey(f"[~] {text}")
+    def critical(self, text):  return self.bold(self.bg_red(f"[!!!] {text}"))
+    
     def highlight(self, text: str, keywords: list[str], color: str = "yellow") -> str:
         colorize = getattr(self, color, self.yellow)
         for kw in keywords:
@@ -117,11 +146,168 @@ class ColorSystem:
         code = palette[level % len(palette)]
         prefix = "  " * level + "│ "
         return self._colorize(prefix, code) + text
-
-    def color256(self, text: str, code: str) -> str:
+    
+    def gradient(self, text: str, start: tuple[int, int, int], end: tuple[int, int, int]) -> str:
+        if not self.support_colors or not text:
+            return text
+        n = max(len(text) - 1, 1)
+        result = []
+        for i, ch in enumerate(text):
+            r = int(start[0] + (end[0] - start[0]) * i / n)
+            g = int(start[1] + (end[1] - start[1]) * i / n)
+            b = int(start[2] + (end[2] - start[2]) * i / n)
+            result.append(self.rgb(ch, r, g, b))
+        return "".join(result)
+    
+    def json(self, data, *, indent: int = 2) -> str:
+        if not isinstance(data, str):
+            text = __import__("json").dumps(data, ensure_ascii=False, indent=indent)
+        else:
+            try:
+                parsed = __import__("json").loads(data)
+                text = __import__("json").dumps(parsed, ensure_ascii=False, indent=indent)
+            except Exception:
+                text = data
+        
         if not self.support_colors:
             return text
-        return f"\033[38;5;{code}m{text}\033[0m"
+        
+        result = []
+        i = 0
+        while i < len(text):
+            ch = text[i]
+            
+            if ch == '"':
+                j = i + 1
+                while j < len(text):
+                    if text[j] == '\\':
+                        j += 2
+                        continue
+                    if text[j] == '"':
+                        j += 1
+                        break
+                    j += 1
+                token = text[i:j]
+                after = text[j:].lstrip()
+                if after.startswith(':'):
+                    result.append(self.cyan(token))
+                else:
+                    result.append(self.green(token))
+                i = j
+                continue
+            
+            if ch in ('{', '}', '[', ']'):
+                result.append(self.grey(ch))
+                i += 1
+                continue
+            
+            if ch == ':':
+                result.append(self.grey(ch))
+                i += 1
+                continue
+            
+            if ch == ',':
+                result.append(self.grey(ch))
+                i += 1
+                continue
+            
+            if ch in ('-', ) or ch.isdigit():
+                j = i
+                while j < len(text) and text[j] in '-0123456789.eE+':
+                    j += 1
+                result.append(self.yellow(text[i:j]))
+                i = j
+                continue
+            
+            if text[i:i+4] == 'true':
+                result.append(self.magenta('true'))
+                i += 4
+                continue
+            
+            if text[i:i+5] == 'false':
+                result.append(self.magenta('false'))
+                i += 5
+                continue
+            
+            if text[i:i+4] == 'null':
+                result.append(self.red('null'))
+                i += 4
+                continue
+            
+            result.append(ch)
+            i += 1
+        
+        return "".join(result)
+        
+    def python(self, code: str) -> str:
+        if not self.support_colors:
+            return code
+        
+        KEYWORDS = set(_keyword.kwlist)
+        BUILTINS = set(dir(__import__("builtins")))
+        DUNDER_RE = re.compile(r'^__\w+__$')
+        
+        SKIP = {
+            _tokenize.ENCODING, _tokenize.ENDMARKER,
+            _tokenize.NEWLINE, _tokenize.NL,
+            _tokenize.INDENT, _tokenize.DEDENT,
+        }
+        
+        def _color_for(ttype, tstr):
+            if ttype == _tokenize.COMMENT:  return "grey"
+            if ttype == _tokenize.STRING:   return "green"
+            if ttype == _tokenize.NUMBER:   return "yellow"
+            if ttype == _tokenize.OP:       return "grey"
+            if ttype == _tokenize.NAME:
+                if tstr in KEYWORDS:            return "magenta"
+                if tstr in ("True","False","None"): return "cyan"
+                if tstr in BUILTINS:            return "cyan"
+                if DUNDER_RE.match(tstr):       return "dark_cyan"
+            return None
+
+        try:
+            tokens = list(_tokenize.generate_tokens(_io.StringIO(code).readline))
+        except _tokenize.TokenError:
+            return code
+        
+        result = []
+        prev_end = (1, 0)
+        lines = code.splitlines(keepends=True)
+        
+        def _text_between(start, end):
+            srow, scol = start
+            erow, ecol = end
+            if srow == erow:
+                return lines[srow - 1][scol:ecol]
+            out = lines[srow - 1][scol:]
+            for r in range(srow, erow - 1):
+                out += lines[r]
+            out += lines[erow - 1][:ecol]
+            return out
+        
+        for tok in tokens:
+            ttype, tstr, tok_start, tok_end, _ = tok
+            if ttype in SKIP:
+                continue
+        
+            gap = _text_between(prev_end, tok_start)
+            if gap:
+                result.append(gap)
+        
+            color = _color_for(ttype, tstr)
+            if color:
+                colorize = getattr(self, color, None)
+                result.append(colorize(tstr) if colorize else tstr)
+            else:
+                result.append(tstr)
+        
+            prev_end = tok_end
+        
+        tail = _text_between(prev_end, (len(lines), len(lines[-1]) if lines else 0))
+        if tail:
+            result.append(tail)
+        
+        return "".join(result)
 
 def typewrite(
     text: str,
