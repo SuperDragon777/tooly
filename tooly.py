@@ -1,6 +1,6 @@
 __version__ = "1.5.0"
 __author__ = "SuperDragon777"
-__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner", "password", "env", "run", "humanize", "tempdir", "lorem", "every", "saves", "patch", "shutdown", "reboot", "hibernate", "lock_device", "cancel_shutdown", "is_admin", "pkill", "plist", "hwid", "music", "download", "ensure_package", "package_version"]
+__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner", "password", "env", "run", "humanize", "tempdir", "lorem", "every", "saves", "patch", "shutdown", "reboot", "hibernate", "lock_device", "cancel_shutdown", "is_admin", "pkill", "plist", "hwid", "music", "download", "ensure_package", "package_version", "ram"]
 
 import platform
 import sys
@@ -30,6 +30,7 @@ import urllib.parse
 import keyword as _keyword
 import tokenize as _tokenize
 import io as _io
+from collections import namedtuple as _namedtuple
 
 try:
     import tty as _tty
@@ -3725,6 +3726,123 @@ def ensure_package(
     except Exception as e:
         log.error(f"ensure_package: unexpected error: {e}")
         return PackageInfo(name=name, installed=False, error=str(e))
+
+RamInfo = _namedtuple("RamInfo", ["total", "used", "free", "percent"])
+
+def ram() -> RamInfo:
+    def _windows() -> RamInfo:
+        try:
+            import ctypes
+            class _MEMORYSTATUSEX(ctypes.Structure):
+                _fields_ = [
+                    ("dwLength", ctypes.c_ulong),
+                    ("dwMemoryLoad", ctypes.c_ulong),
+                    ("ullTotalPhys", ctypes.c_ulonglong),
+                    ("ullAvailPhys", ctypes.c_ulonglong),
+                    ("ullTotalPageFile", ctypes.c_ulonglong),
+                    ("ullAvailPageFile", ctypes.c_ulonglong),
+                    ("ullTotalVirtual", ctypes.c_ulonglong),
+                    ("ullAvailVirtual", ctypes.c_ulonglong),
+                    ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+                ]
+            stat = _MEMORYSTATUSEX()
+            stat.dwLength = ctypes.sizeof(stat)
+            ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat))
+            total = stat.ullTotalPhys
+            free  = stat.ullAvailPhys
+            used  = total - free
+            pct   = round(used / total * 100, 1) if total else 0.0
+            return RamInfo(total=total, used=used, free=free, percent=pct)
+        except Exception:
+            return RamInfo(0, 0, 0, 0.0)
+
+    def _linux() -> RamInfo:
+        try:
+            info = {}
+            with open("/proc/meminfo", "r") as f:
+                for line in f:
+                    parts = line.split()
+                    if len(parts) >= 2:
+                        info[parts[0].rstrip(":")] = int(parts[1]) * 1024
+            total    = info.get("MemTotal", 0)
+            free_mem = info.get("MemFree", 0)
+            buffers  = info.get("Buffers", 0)
+            cached   = info.get("Cached", 0) + info.get("SReclaimable", 0) - info.get("Shmem", 0)
+            used     = total - free_mem - buffers - cached
+            free     = total - used
+            pct      = round(used / total * 100, 1) if total else 0.0
+            return RamInfo(total=total, used=used, free=free, percent=pct)
+        except Exception:
+            return RamInfo(0, 0, 0, 0.0)
+
+    def _macos() -> RamInfo:
+        try:
+            out = subprocess.check_output(
+                ["sysctl", "-n", "hw.memsize"],
+                text=True, encoding="utf-8", errors="replace",
+                stdin=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+            total = int(out.strip())
+            vm_out = subprocess.check_output(
+                ["vm_stat"],
+                text=True, encoding="utf-8", errors="replace",
+                stdin=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+            page_size = 16384
+            ps_match = re.search(r"page size of (\d+) bytes", vm_out)
+            if ps_match:
+                page_size = int(ps_match.group(1))
+            stats = {}
+            for line in vm_out.splitlines():
+                m = re.match(r"^(.+?):\s+(\d+)", line)
+                if m:
+                    stats[m.group(1).strip()] = int(m.group(2)) * page_size
+            used = (
+                stats.get("Pages active", 0) +
+                stats.get("Pages wired down", 0) +
+                stats.get("Pages occupied by compressor", 0)
+            )
+            free = total - used
+            pct  = round(used / total * 100, 1) if total else 0.0
+            return RamInfo(total=total, used=used, free=free, percent=pct)
+        except Exception:
+            return RamInfo(0, 0, 0, 0.0)
+
+    def _freebsd() -> RamInfo:
+        try:
+            total_out = subprocess.check_output(
+                ["sysctl", "-n", "hw.physmem"],
+                text=True, encoding="utf-8", errors="replace",
+                stdin=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+            total = int(total_out.strip())
+            vmstat_out = subprocess.check_output(
+                ["vmstat", "-H"],
+                text=True, encoding="utf-8", errors="replace",
+                stdin=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+            lines = vmstat_out.strip().splitlines()
+            if len(lines) >= 3:
+                parts = lines[-1].split()
+                free = int(parts[4]) * 1024 if len(parts) > 4 else 0
+            else:
+                free = 0
+            used = total - free
+            pct  = round(used / total * 100, 1) if total else 0.0
+            return RamInfo(total=total, used=used, free=free, percent=pct)
+        except Exception:
+            return RamInfo(0, 0, 0, 0.0)
+
+    def _default() -> RamInfo:
+        return RamInfo(0, 0, 0, 0.0)
+
+    return on_platform(
+        windows=_windows,
+        linux=_linux,
+        macos=_macos,
+        freebsd=_freebsd,
+        default=_default,
+    )
 
 if __name__ == "__main__":
     cls()
