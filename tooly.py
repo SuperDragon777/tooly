@@ -1,6 +1,6 @@
 __version__ = "1.5.0"
 __author__ = "SuperDragon777"
-__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner", "password", "env", "run", "humanize", "tempdir", "lorem", "every", "saves", "patch", "shutdown", "reboot", "hibernate", "lock_device", "cancel_shutdown", "is_admin", "pkill", "plist", "hwid", "music", "download", "ensure_package", "package_version", "ram"]
+__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner", "password", "env", "run", "humanize", "tempdir", "lorem", "every", "saves", "patch", "shutdown", "reboot", "hibernate", "lock_device", "cancel_shutdown", "is_admin", "pkill", "plist", "hwid", "music", "download", "ensure_package", "package_version", "ram", "cpu"]
 
 import platform
 import sys
@@ -3835,6 +3835,209 @@ def ram() -> RamInfo:
 
     def _default() -> RamInfo:
         return RamInfo(0, 0, 0, 0.0)
+
+    return on_platform(
+        windows=_windows,
+        linux=_linux,
+        macos=_macos,
+        freebsd=_freebsd,
+        default=_default,
+    )
+
+CpuInfo = _namedtuple("CpuInfo", ["count", "percent", "freq_mhz", "model"])
+
+def cpu(interval: float = 0.1) -> CpuInfo:
+    def _read_proc_stat():
+        with open("/proc/stat", "r") as f:
+            line = f.readline()
+        fields = list(map(int, line.split()[1:]))
+        idle  = fields[3] + (fields[4] if len(fields) > 4 else 0)
+        total = sum(fields)
+        return total, idle
+    
+    def _linux() -> CpuInfo:
+        try:
+            t1, i1 = _read_proc_stat()
+            time.sleep(interval)
+            t2, i2 = _read_proc_stat()
+            dt = t2 - t1
+            pct = round((1.0 - (i2 - i1) / dt) * 100, 1) if dt else 0.0
+    
+            count = 0
+            try:
+                with open("/proc/cpuinfo", "r") as f:
+                    count = sum(1 for l in f if l.startswith("processor"))
+            except Exception:
+                pass
+            
+            model = ""
+            freq  = 0.0
+            try:
+                with open("/proc/cpuinfo", "r") as f:
+                    for line in f:
+                        if not model and line.startswith("model name"):
+                            model = line.split(":", 1)[1].strip()
+                        if not freq and line.startswith("cpu MHz"):
+                            freq = round(float(line.split(":", 1)[1].strip()), 1)
+                        if model and freq:
+                            break
+            except Exception:
+                pass
+            
+            return CpuInfo(count=count, percent=pct, freq_mhz=freq, model=model)
+        except Exception:
+            return CpuInfo(0, 0.0, 0.0, "")
+        
+    def _windows() -> CpuInfo:
+        try:
+            import ctypes
+            import ctypes.wintypes
+            
+            kernel32 = ctypes.windll.kernel32
+            
+            class _FILETIME(ctypes.Structure):
+                _fields_ = [("dwLowDateTime", ctypes.wintypes.DWORD),
+                            ("dwHighDateTime", ctypes.wintypes.DWORD)]
+                
+            def _ft_to_int(ft):
+                return (ft.dwHighDateTime << 32) | ft.dwLowDateTime
+            
+            def _sample():
+                idle = _FILETIME(); kern = _FILETIME(); user = _FILETIME()
+                kernel32.GetSystemTimes(ctypes.byref(idle), ctypes.byref(kern), ctypes.byref(user))
+                return _ft_to_int(idle), _ft_to_int(kern) + _ft_to_int(user)
+            
+            i1, t1 = _sample()
+            time.sleep(interval)
+            i2, t2 = _sample()
+            dt = t2 - t1
+            pct = round((1.0 - (i2 - i1) / dt) * 100, 1) if dt else 0.0
+            
+            count = int(os.environ.get("NUMBER_OF_PROCESSORS", 0))
+            
+            model = ""
+            freq  = 0.0
+            try:
+                out = subprocess.check_output(
+                    ["wmic", "cpu", "get", "Name,MaxClockSpeed", "/format:csv"],
+                    text=True, encoding="utf-8", errors="replace",
+                    stdin=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                )
+                for line in out.splitlines():
+                    parts = line.strip().split(",")
+                    if len(parts) >= 3 and parts[1].strip().isdigit():
+                        freq  = float(parts[1].strip())
+                        model = parts[2].strip()
+                        break
+            except Exception:
+                pass
+            
+            return CpuInfo(count=count, percent=pct, freq_mhz=freq, model=model)
+        except Exception:
+            return CpuInfo(0, 0.0, 0.0, "")
+        
+    def _macos() -> CpuInfo:
+        try:
+            out1 = subprocess.check_output(
+                ["iostat", "-c", "2", "-w", str(interval)],
+                text=True, encoding="utf-8", errors="replace",
+                stdin=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            )
+            pct = 0.0
+            for line in reversed(out1.splitlines()):
+                parts = line.split()
+                if len(parts) >= 3 and parts[-1].replace(".", "").isdigit():
+                    try:
+                        idle = float(parts[-1])
+                        pct  = round(100.0 - idle, 1)
+                        break
+                    except ValueError:
+                        pass
+
+            count = 0
+            try:
+                c_out = subprocess.check_output(
+                    ["sysctl", "-n", "hw.logicalcpu"],
+                    text=True, encoding="utf-8", errors="replace",
+                    stdin=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                )
+                count = int(c_out.strip())
+            except Exception:
+                pass
+
+            model = ""
+            freq  = 0.0
+            try:
+                m_out = subprocess.check_output(
+                    ["sysctl", "-n", "machdep.cpu.brand_string"],
+                    text=True, encoding="utf-8", errors="replace",
+                    stdin=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                )
+                model = m_out.strip()
+                f_match = re.search(r"(\d+(?:\.\d+)?)\s*GHz", model)
+                if f_match:
+                    freq = round(float(f_match.group(1)) * 1000, 1)
+            except Exception:
+                pass
+
+            return CpuInfo(count=count, percent=pct, freq_mhz=freq, model=model)
+        except Exception:
+            return CpuInfo(0, 0.0, 0.0, "")
+
+    def _freebsd() -> CpuInfo:
+        try:
+            def _sample():
+                out = subprocess.check_output(
+                    ["sysctl", "-n", "kern.cp_time"],
+                    text=True, encoding="utf-8", errors="replace",
+                    stdin=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                )
+                vals = list(map(int, out.strip().split()))
+                idle  = vals[4] if len(vals) > 4 else 0
+                total = sum(vals)
+                return total, idle
+
+            t1, i1 = _sample()
+            time.sleep(interval)
+            t2, i2 = _sample()
+            dt = t2 - t1
+            pct = round((1.0 - (i2 - i1) / dt) * 100, 1) if dt else 0.0
+
+            count = 0
+            try:
+                c_out = subprocess.check_output(
+                    ["sysctl", "-n", "hw.ncpu"],
+                    text=True, encoding="utf-8", errors="replace",
+                    stdin=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                )
+                count = int(c_out.strip())
+            except Exception:
+                pass
+
+            model = ""
+            freq  = 0.0
+            try:
+                m_out = subprocess.check_output(
+                    ["sysctl", "-n", "hw.model"],
+                    text=True, encoding="utf-8", errors="replace",
+                    stdin=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                )
+                model = m_out.strip()
+                f_out = subprocess.check_output(
+                    ["sysctl", "-n", "hw.clockrate"],
+                    text=True, encoding="utf-8", errors="replace",
+                    stdin=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                )
+                freq = float(f_out.strip())
+            except Exception:
+                pass
+
+            return CpuInfo(count=count, percent=pct, freq_mhz=freq, model=model)
+        except Exception:
+            return CpuInfo(0, 0.0, 0.0, "")
+
+    def _default() -> CpuInfo:
+        return CpuInfo(0, 0.0, 0.0, "")
 
     return on_platform(
         windows=_windows,
