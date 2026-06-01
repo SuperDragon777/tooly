@@ -1,6 +1,6 @@
 __version__ = "1.5.0"
 __author__ = "SuperDragon777"
-__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner", "password", "env", "run", "humanize", "tempdir", "lorem", "every", "saves", "patch", "shutdown", "reboot", "hibernate", "lock_device", "cancel_shutdown", "is_admin", "pkill", "plist", "hwid", "music", "download", "ensure_package", "package_version", "ram", "cpu"]
+__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner", "password", "env", "run", "humanize", "tempdir", "lorem", "every", "saves", "patch", "shutdown", "reboot", "hibernate", "lock_device", "cancel_shutdown", "is_admin", "pkill", "plist", "hwid", "music", "download", "ensure_package", "package_version", "ram", "cpu", "unzip"]
 
 import platform
 import sys
@@ -31,6 +31,11 @@ import keyword as _keyword
 import tokenize as _tokenize
 import io as _io
 from collections import namedtuple as _namedtuple
+import gzip
+import bz2
+import lzma
+import tarfile
+import zipfile
 
 try:
     import tty as _tty
@@ -2547,7 +2552,7 @@ class _SavesManager:
             raise
 
         if self.verbose:
-            print(colors.success(f"Saved '{key}' → {file_path}"))
+            print(colors.success(f"Saved '{key}' - {file_path}"))
 
     def load(self, key: str, *, fmt: str = "json", folder: Optional[str] = None, default: Any = None) -> Any:
         file_path = self._resolve_path(key, fmt, folder)
@@ -2749,7 +2754,7 @@ class _PatchContext:
         ts     = colors.grey(datetime.now().strftime("%H:%M:%S.%f")[:-3])
         label  = colors.yellow(f"[~] {self._label}")
         key    = colors.bold(f"{name:<18}")
-        arrow  = colors.grey("→")
+        arrow  = colors.grey("-")
 
         if old is _PATCH_MISSING:
             
@@ -4046,6 +4051,285 @@ def cpu(interval: float = 0.1) -> CpuInfo:
         freebsd=_freebsd,
         default=_default,
     )
+
+@dataclass
+class UnzipResult:
+    success: bool
+    dest: Optional[str] = None
+    files: list[str] = field(default_factory=list)
+    count: int = 0
+    error: Optional[str] = None
+
+    def __bool__(self):
+        return self.success
+
+
+def _unzip_progress(label: str, i: int, total: int):
+    pct = i / total
+    width = 28
+    filled = int(width * pct)
+    bar = "█" * filled + "░" * (width - filled)
+    sys.stdout.write(
+        f"\r{ColorSystem().blue(label)} |{bar}| "
+        f"{pct*100:5.1f}% ({i}/{total})\033[K"
+    )
+    sys.stdout.flush()
+
+
+def _detect_format(path: str) -> Optional[str]:
+    name = path.lower()
+    if name.endswith(".tar.gz") or name.endswith(".tgz"):   return "tar.gz"
+    if name.endswith(".tar.bz2") or name.endswith(".tbz2"): return "tar.bz2"
+    if name.endswith(".tar.xz") or name.endswith(".txz"):   return "tar.xz"
+    if name.endswith(".tar.zst"):                           return "tar.zst"
+    if name.endswith(".tar"):                               return "tar"
+    if name.endswith(".zip"):                               return "zip"
+    if name.endswith(".bz2"):                               return "bz2"
+    if name.endswith(".gz"):                                return "gz"
+    if name.endswith(".xz"):                                return "xz"
+    if name.endswith(".zst"):                               return "zst"
+    if name.endswith(".rar"):                               return "rar"
+    if name.endswith(".7z"):                                return "7z"
+    if zipfile.is_zipfile(path):                            return "zip"
+    if tarfile.is_tarfile(path):                            return "tar"
+    return None
+
+
+def _unzip_zip(path, dest, overwrite, password, members, progress) -> UnzipResult:
+    pwd = password.encode() if password else None
+    label = os.path.basename(path)
+    try:
+        with zipfile.ZipFile(path, "r") as zf:
+            all_members = zf.namelist()
+            targets = members if members is not None else all_members
+            targets = [m for m in targets if m in all_members]
+            if not targets:
+                return UnzipResult(success=False, dest=dest, error="No matching members")
+            extracted = []
+            for i, member in enumerate(targets, 1):
+                out_path = os.path.join(dest, member)
+                if not overwrite and os.path.exists(out_path):
+                    continue
+                if progress and sys.stdout.isatty():
+                    _unzip_progress(label, i, len(targets))
+                zf.extract(member, dest, pwd=pwd)
+                extracted.append(out_path)
+            if progress and sys.stdout.isatty():
+                sys.stdout.write("\n"); sys.stdout.flush()
+            return UnzipResult(success=True, dest=dest, files=extracted, count=len(extracted))
+    except RuntimeError as e:
+        return UnzipResult(success=False, error=str(e) + " (wrong password?)")
+    except Exception as e:
+        return UnzipResult(success=False, error=str(e))
+
+
+def _unzip_tar(path, dest, overwrite, members, progress, mode="r:*") -> UnzipResult:
+    label = os.path.basename(path)
+    try:
+        with tarfile.open(path, mode) as tf:
+            all_members = tf.getnames()
+            targets_names = set(members) if members is not None else None
+            targets = [m for m in tf.getmembers()
+                       if targets_names is None or m.name in targets_names]
+            if not targets:
+                return UnzipResult(success=False, dest=dest, error="No matching members")
+            extracted = []
+            for i, member in enumerate(targets, 1):
+                out_path = os.path.join(dest, member.name)
+                if not overwrite and os.path.exists(out_path):
+                    continue
+                if progress and sys.stdout.isatty():
+                    _unzip_progress(label, i, len(targets))
+                tf.extract(member, dest, set_attrs=False)
+                extracted.append(out_path)
+            if progress and sys.stdout.isatty():
+                sys.stdout.write("\n"); sys.stdout.flush()
+            return UnzipResult(success=True, dest=dest, files=extracted, count=len(extracted))
+    except Exception as e:
+        return UnzipResult(success=False, error=str(e))
+
+
+def _unzip_single(path, dest, overwrite, progress, open_fn) -> UnzipResult:
+    import shutil
+    label = os.path.basename(path)
+    out_name = re.sub(r'\.(gz|bz2|xz|zst)$', '', label, flags=re.IGNORECASE)
+    out_path = os.path.join(dest, out_name)
+    if not overwrite and os.path.exists(out_path):
+        return UnzipResult(success=False, dest=dest, error="File already exists. Use overwrite=True.")
+    try:
+        with open_fn(path, "rb") as src, open(out_path, "wb") as dst:
+            chunk_size = 1024 * 64
+            total_written = 0
+            while True:
+                chunk = src.read(chunk_size)
+                if not chunk:
+                    break
+                dst.write(chunk)
+                total_written += len(chunk)
+                if progress and sys.stdout.isatty():
+                    sys.stdout.write(
+                        f"\r{ColorSystem().blue(label)} "
+                        f"{_humanize_bytes(total_written)} "
+                        f"{ColorSystem().grey('...')}\033[K"
+                    )
+                    sys.stdout.flush()
+        if progress and sys.stdout.isatty():
+            sys.stdout.write("\n"); sys.stdout.flush()
+        return UnzipResult(success=True, dest=dest, files=[out_path], count=1)
+    except Exception as e:
+        return UnzipResult(success=False, error=str(e))
+
+
+def _unzip_rar(path, dest, overwrite, password, members, progress) -> UnzipResult:
+    label = os.path.basename(path)
+    try:
+        import rarfile
+        with rarfile.RarFile(path, "r") as rf:
+            if password:
+                rf.setpassword(password)
+            all_members = rf.namelist()
+            targets = members if members is not None else all_members
+            targets = [m for m in targets if m in all_members]
+            if not targets:
+                return UnzipResult(success=False, dest=dest, error="No matching members")
+            extracted = []
+            for i, member in enumerate(targets, 1):
+                out_path = os.path.join(dest, member)
+                if not overwrite and os.path.exists(out_path):
+                    continue
+                if progress and sys.stdout.isatty():
+                    _unzip_progress(label, i, len(targets))
+                rf.extract(member, dest)
+                extracted.append(out_path)
+            if progress and sys.stdout.isatty():
+                sys.stdout.write("\n"); sys.stdout.flush()
+            return UnzipResult(success=True, dest=dest, files=extracted, count=len(extracted))
+    except ImportError:
+        pass
+    for tool in ("unrar", "rar"):
+        if shutil.which(tool):
+            cmd = [tool, "x", "-y", path, dest + os.sep]
+            if password:
+                cmd.insert(2, f"-p{password}")
+            res = subprocess.run(cmd, stdin=subprocess.DEVNULL,
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if res.returncode == 0:
+                extracted = [os.path.join(dp, f)
+                            for dp, _, fns in os.walk(dest) for f in fns]
+                return UnzipResult(success=True, dest=dest, files=extracted, count=len(extracted))
+    return UnzipResult(success=False, error="RAR support requires 'rarfile' package or unrar/rar in PATH")
+
+
+def _unzip_7z(path, dest, overwrite, password, members, progress) -> UnzipResult:
+    try:
+        import py7zr
+        with py7zr.SevenZipFile(path, "r", password=password) as sz:
+            targets = members if members is not None else None
+            sz.extract(dest, targets=targets)
+            extracted = [os.path.join(dp, f)
+                        for dp, _, fns in os.walk(dest) for f in fns]
+            return UnzipResult(success=True, dest=dest, files=extracted, count=len(extracted))
+    except ImportError:
+        pass
+    for tool in ("7z", "7za", "7zr"):
+        if shutil.which(tool):
+            cmd = [tool, "x", path, f"-o{dest}", "-y"]
+            if password:
+                cmd.append(f"-p{password}")
+            res = subprocess.run(cmd, stdin=subprocess.DEVNULL,
+                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if res.returncode == 0:
+                extracted = [os.path.join(dp, f)
+                            for dp, _, fns in os.walk(dest) for f in fns]
+                return UnzipResult(success=True, dest=dest, files=extracted, count=len(extracted))
+    return UnzipResult(success=False, error="7z support requires 'py7zr' package or 7z in PATH")
+
+
+def _unzip_zst(path, dest, overwrite, progress) -> UnzipResult:
+    try:
+        import zstandard
+        return _unzip_single(path, dest, overwrite, progress,
+                            lambda p, m: zstandard.open(p, "rb"))
+    except ImportError:
+        pass
+    if shutil.which("zstd"):
+        out_name = re.sub(r'\.zst$', '', os.path.basename(path), flags=re.IGNORECASE)
+        out_path = os.path.join(dest, out_name)
+        res = subprocess.run(["zstd", "-d", path, "-o", out_path, "-f"],
+                            stdin=subprocess.DEVNULL,
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if res.returncode == 0:
+            return UnzipResult(success=True, dest=dest, files=[out_path], count=1)
+    return UnzipResult(success=False, error="zst support requires 'zstandard' package or zstd in PATH")
+
+
+def unzip(
+    path: str,
+    dest: Optional[str] = None,
+    *,
+    overwrite: bool = True,
+    password: Optional[str] = None,
+    members: Optional[list[str]] = None,
+    progress: bool = True,
+) -> UnzipResult:
+    
+
+    path = os.path.expanduser(path)
+
+    if not os.path.isfile(path):
+        log.error(f"unzip: file not found: {path}")
+        return UnzipResult(success=False, error=f"File not found: {path}")
+
+    fmt = _detect_format(path)
+    if fmt is None:
+        log.error(f"unzip: unsupported or unrecognized format: {path}")
+        return UnzipResult(success=False, error="Unsupported or unrecognized archive format")
+
+    if dest is None:
+        base = path
+        for ext in (".tar.gz", ".tar.bz2", ".tar.xz", ".tar.zst", ".tgz", ".tbz2", ".txz"):
+            if path.lower().endswith(ext):
+                base = path[: -len(ext)]
+                break
+        else:
+            base = os.path.splitext(path)[0]
+        dest = base
+
+    dest = os.path.expanduser(dest)
+    os.makedirs(dest, exist_ok=True)
+
+    start = time.perf_counter()
+
+    if fmt == "zip":
+        result = _unzip_zip(path, dest, overwrite, password, members, progress)
+    elif fmt in ("tar", "tar.gz", "tar.bz2", "tar.xz", "tar.zst"):
+        result = _unzip_tar(path, dest, overwrite, members, progress)
+    elif fmt == "gz":
+        result = _unzip_single(path, dest, overwrite, progress, gzip.open)
+    elif fmt == "bz2":
+        result = _unzip_single(path, dest, overwrite, progress, bz2.open)
+    elif fmt == "xz":
+        result = _unzip_single(path, dest, overwrite, progress, lzma.open)
+    elif fmt == "zst":
+        result = _unzip_zst(path, dest, overwrite, progress)
+    elif fmt == "rar":
+        result = _unzip_rar(path, dest, overwrite, password, members, progress)
+    elif fmt == "7z":
+        result = _unzip_7z(path, dest, overwrite, password, members, progress)
+    else:
+        result = UnzipResult(success=False, error=f"Unsupported format: {fmt}")
+
+    elapsed = time.perf_counter() - start
+
+    if result.success:
+        log.success(
+            f"unzip: extracted {result.count} file(s) - {dest} "
+            f"({_format_duration(elapsed)})"
+        )
+    else:
+        log.error(f"unzip: {result.error}")
+
+    return result
 
 if __name__ == "__main__":
     cls()
