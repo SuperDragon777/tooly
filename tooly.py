@@ -1,6 +1,6 @@
 __version__ = "1.5.0"
 __author__ = "SuperDragon777"
-__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner", "password", "env", "run", "humanize", "tempdir", "lorem", "every", "saves", "patch", "shutdown", "reboot", "hibernate", "lock_device", "cancel_shutdown", "is_admin", "pkill", "plist", "hwid", "music", "download", "ensure_package", "package_version", "ram", "cpu", "unzip", "remove"]
+__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner", "password", "env", "run", "humanize", "tempdir", "lorem", "every", "saves", "patch", "shutdown", "reboot", "hibernate", "lock_device", "cancel_shutdown", "is_admin", "pkill", "plist", "hwid", "music", "download", "ensure_package", "package_version", "ram", "cpu", "unzip", "remove", "md5"]
 
 import platform
 import sys
@@ -4449,6 +4449,39 @@ def remove(
     except Exception as e:
         log.error(f"remove: {e}")
         return RemoveResult(success=False, path=path, error=str(e))
+
+def md5(
+    data: Union[str, bytes, os.PathLike],
+    *,
+    chunk_size: int = 1024 * 256,
+    encoding: str = "utf-8",
+) -> str:
+    h = hashlib.md5()
+
+    if isinstance(data, (str, os.PathLike)) and os.path.isfile(data):
+        with open(data, "rb") as f:
+            if hasattr(f, "readinto"):
+                buf = bytearray(chunk_size)
+                view = memoryview(buf)
+                while True:
+                    n = f.readinto(buf)
+                    if not n:
+                        break
+                    h.update(view[:n])
+            else:
+                while True:
+                    chunk = f.read(chunk_size)
+                    if not chunk:
+                        break
+                    h.update(chunk)
+    elif isinstance(data, bytes):
+        h.update(data)
+    elif isinstance(data, str):
+        h.update(data.encode(encoding))
+    else:
+        raise TypeError(f"Unsupported data type: {type(data)}")
+
+    return h.hexdigest()
 
 if __name__ == "__main__":
     cls()
