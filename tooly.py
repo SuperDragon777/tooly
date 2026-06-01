@@ -1,6 +1,6 @@
 __version__ = "1.5.0"
 __author__ = "SuperDragon777"
-__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner", "password", "env", "run", "humanize", "tempdir", "lorem", "every", "saves", "patch", "shutdown", "reboot", "hibernate", "lock_device", "cancel_shutdown", "is_admin", "pkill", "plist", "hwid", "music", "download", "ensure_package", "package_version", "ram", "cpu", "unzip"]
+__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner", "password", "env", "run", "humanize", "tempdir", "lorem", "every", "saves", "patch", "shutdown", "reboot", "hibernate", "lock_device", "cancel_shutdown", "is_admin", "pkill", "plist", "hwid", "music", "download", "ensure_package", "package_version", "ram", "cpu", "unzip", "remove"]
 
 import platform
 import sys
@@ -4330,6 +4330,125 @@ def unzip(
         log.error(f"unzip: {result.error}")
 
     return result
+
+@dataclass
+class RemoveResult:
+    success: bool
+    path: str
+    error: Optional[str] = None
+
+    def __bool__(self):
+        return self.success
+
+
+def remove(
+    path: str,
+    *,
+    recursive: bool = False,
+    missing_ok: bool = True,
+    trash: bool = False,
+) -> RemoveResult:
+    path = os.path.expanduser(path)
+
+    if not os.path.exists(path):
+        if missing_ok:
+            return RemoveResult(success=True, path=path)
+        log.error(f"remove: path not found: {path}")
+        return RemoveResult(success=False, path=path, error="Path not found")
+
+    if trash:
+        def _windows_trash() -> RemoveResult:
+            try:
+                from ctypes import windll, create_unicode_buffer
+                import struct
+                SHFileOperationW = windll.shell32.SHFileOperationW
+                buf = create_unicode_buffer(path + "\0\0")
+                params = struct.pack(
+                    "PHHPHHPP",
+                    0, 0x0003, 0,
+                    buf, 0x0054, 0, None, None,
+                )
+                SHFileOperationW(params)
+                return RemoveResult(success=True, path=path)
+            except Exception:
+                pass
+            try:
+                subprocess.run(
+                    ["powershell", "-Command",
+                    f'Add-Type -AssemblyName Microsoft.VisualBasic; '
+                    f'[Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile('
+                    f'"{path}",'
+                    f'"OnlyErrorDialogs","SendToRecycleBin")'],
+                    stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL, check=True,
+                )
+                return RemoveResult(success=True, path=path)
+            except Exception as e:
+                return RemoveResult(success=False, path=path, error=str(e))
+
+        def _macos_trash() -> RemoveResult:
+            try:
+                script = f'tell application "Finder" to delete POSIX file "{path}"'
+                subprocess.run(
+                    ["osascript", "-e", script],
+                    stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL, check=True,
+                )
+                return RemoveResult(success=True, path=path)
+            except Exception as e:
+                return RemoveResult(success=False, path=path, error=str(e))
+
+        def _linux_trash() -> RemoveResult:
+            for tool in ("gio", "trash-put", "gvfs-trash"):
+                if shutil.which(tool):
+                    cmd = ["gio", "trash", path] if tool == "gio" else [tool, path]
+                    try:
+                        subprocess.run(
+                            cmd, stdin=subprocess.DEVNULL,
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                            check=True,
+                        )
+                        return RemoveResult(success=True, path=path)
+                    except Exception:
+                        continue
+            try:
+                ensure_package("send2trash", quiet=True)
+                import send2trash
+                send2trash.send2trash(path)
+                return RemoveResult(success=True, path=path)
+            except Exception as e:
+                return RemoveResult(success=False, path=path, error=str(e))
+
+        result = on_platform(
+            windows=_windows_trash,
+            macos=_macos_trash,
+            linux=_linux_trash,
+            default=lambda: RemoveResult(success=False, path=path, error="Trash not supported on this platform"),
+        )
+
+        if result.success:
+            log.success(f"remove: moved to trash: {path}")
+        else:
+            log.error(f"remove: {result.error}")
+        return result
+
+    try:
+        if os.path.isfile(path) or os.path.islink(path):
+            os.remove(path)
+        elif os.path.isdir(path):
+            if recursive:
+                shutil.rmtree(path)
+            else:
+                log.error(f"remove: '{path}' is a directory, use recursive=True")
+                return RemoveResult(success=False, path=path, error="Is a directory. Use recursive=True.")
+        log.success(f"remove: deleted '{path}'")
+        return RemoveResult(success=True, path=path)
+    except PermissionError as e:
+        log.error(f"remove: permission denied: {path}")
+        return RemoveResult(success=False, path=path, error=str(e))
+    except Exception as e:
+        log.error(f"remove: {e}")
+        return RemoveResult(success=False, path=path, error=str(e))
 
 if __name__ == "__main__":
     cls()
