@@ -1,6 +1,6 @@
 __version__ = "1.5.0"
 __author__ = "SuperDragon777"
-__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner", "password", "env", "run", "humanize", "tempdir", "lorem", "every", "saves", "patch", "shutdown", "reboot", "hibernate", "lock_device", "cancel_shutdown", "is_admin", "pkill", "plist", "hwid", "music", "download", "ensure_package", "package_version", "ram", "cpu", "unzip", "remove", "md5"]
+__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner", "password", "env", "run", "humanize", "tempdir", "lorem", "every", "saves", "patch", "shutdown", "reboot", "hibernate", "lock_device", "cancel_shutdown", "is_admin", "pkill", "plist", "hwid", "music", "download", "ensure_package", "package_version", "ram", "cpu", "unzip", "remove", "md5", "triangle"]
 
 import platform
 import sys
@@ -4482,6 +4482,46 @@ def md5(
         raise TypeError(f"Unsupported data type: {type(data)}")
 
     return h.hexdigest()
+
+def triangle(
+    char: str = "█",
+    *,
+    delay: float = 0.02,
+    color: str = "cyan",
+    end_delay: float = 0.5,
+) -> None:
+    colors = ColorSystem()
+    colorize = getattr(colors, color, colors.blue)
+
+    try:
+        term_size = os.get_terminal_size()
+        term_width = term_size.columns
+        term_height = term_size.lines
+    except OSError:
+        term_width = 80
+        term_height = 24
+
+    rows = term_height - 1
+
+    time.sleep(end_delay)
+    cls()
+
+    for i in range(1, rows + 1):
+        ratio = i / rows
+        count = max(1, round(ratio * term_width))
+        if count % 2 == 0:
+            count -= 1
+        count = min(count, term_width)
+
+        pad = (term_width - count) // 2
+        line = " " * pad + colorize(char * count)
+
+        sys.stdout.write(line + "\n")
+        sys.stdout.flush()
+        time.sleep(delay)
+
+    time.sleep(end_delay)
+    cls()
 
 if __name__ == "__main__":
     cls()
