@@ -1,6 +1,6 @@
 __version__ = "1.6.0"
 __author__ = "SuperDragon777"
-__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner", "password", "env", "run", "humanize", "tempdir", "lorem", "every", "saves", "patch", "shutdown", "reboot", "hibernate", "lock_device", "cancel_shutdown", "is_admin", "pkill", "plist", "hwid", "music", "download", "ensure_package", "package_version", "ram", "cpu", "unzip", "remove", "md5", "triangle"]
+__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner", "password", "env", "run", "humanize", "tempdir", "lorem", "every", "saves", "patch", "shutdown", "reboot", "hibernate", "lock_device", "cancel_shutdown", "is_admin", "pkill", "plist", "hwid", "music", "download", "ensure_package", "package_version", "ram", "cpu", "unzip", "remove", "md5", "triangle", "ordinal", "today", "ago", "sleep_until", "parse_date", "slugify", "truncate"]
 
 import platform
 import sys
@@ -36,6 +36,8 @@ import bz2
 import lzma
 import tarfile
 import zipfile
+import socket
+import struct
 
 try:
     import tty as _tty
@@ -4522,6 +4524,126 @@ def triangle(
 
     time.sleep(end_delay)
     cls()
+
+def ordinal(n: int) -> str:
+    if 10 <= n % 100 <= 20:
+        suffix = "th"
+    else:
+        suffix = {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    return f"{n}{suffix}"
+
+def today(
+    source: str = "local",
+    timeout: float = 5.0, 
+    as_string: bool = False,
+    fmt: str = "%Y-%m-%d"
+    ) -> datetime | str:
+    if source == "local":
+        dt = datetime.now()
+    elif source == "internet":
+        ntp_servers = [
+            "pool.ntp.org",
+            "time.google.com", 
+            "time.windows.com",
+            "time.apple.com",
+            "time.cloudflare.com",
+            "ntp1.vniiftri.ru",
+            "ntp2.vniiftri.ru",
+            "time.nist.gov"
+        ]
+        
+        dt = None
+        for server in ntp_servers:
+            try:
+                client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                client.settimeout(timeout)
+                
+                NTP_PACKET = b'\x1b' + 47 * b'\0'
+                client.sendto(NTP_PACKET, (server, 123))
+                data, _ = client.recvfrom(1024)
+                client.close()
+                
+                INTEGER = struct.unpack(">12I", data)[10]
+                timestamp = INTEGER - 2208988800
+                
+                dt = datetime.fromtimestamp(timestamp)
+                break
+            except Exception:
+                continue
+        
+        if dt is None:
+            log.warn("Failed to get date from internet, falling back to local")
+            dt = datetime.now()
+    else:
+        raise ValueError(f"Invalid source: {source}. Use 'local' or 'internet'")
+    
+    return dt.strftime(fmt) if as_string else dt
+
+def ago(dt: datetime, precision: int = 1) -> str:
+    now = datetime.now()
+    diff = now - dt
+    
+    if diff.total_seconds() < 0:
+        return "in the future"
+    
+    seconds = int(diff.total_seconds())
+    
+    intervals = [
+        (31536000, "year", "years"),
+        (2592000, "month", "months"),
+        (86400, "day", "days"),
+        (3600, "hour", "hours"),
+        (60, "minute", "minutes"),
+        (1, "second", "seconds")
+    ]
+    
+    parts = []
+    for sec, single, plural in intervals:
+        if seconds >= sec:
+            val = seconds // sec
+            parts.append(f"{val} {single if val == 1 else plural}")
+            seconds %= sec
+            if len(parts) >= precision:
+                break
+    
+    return "just now" if not parts else " ".join(parts) + " ago"
+
+def sleep_until(target: datetime, poll_interval: float = 0.1) -> bool:
+    if target <= datetime.now():
+        log.warn("Target time is in the past")
+        return False
+    
+    while datetime.now() < target:
+        time.sleep(min(poll_interval, (target - datetime.now()).total_seconds()))
+    
+    return True
+
+def parse_date(date_str: str, formats: Optional[list[str]] = None) -> Optional[datetime]:
+    if formats is None:
+        formats = [
+            "%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%d.%m.%Y %H:%M",
+            "%d.%m.%Y", "%Y/%m/%d", "%d/%m/%Y", "%Y%m%d"
+        ]
+    
+    for fmt in formats:
+        try:
+            return datetime.strptime(date_str, fmt)
+        except ValueError:
+            continue
+    
+    log.error(f"Could not parse date: {date_str}")
+    return None
+
+def slugify(text: str, separator: str = "_") -> str:
+    text = text.lower().strip()
+    text = re.sub(r"[^\w\s-]", "", text)
+    text = re.sub(r"[\s_-]+", separator, text)
+    return text.strip(separator)
+
+def truncate(text: str, length: int = 10, suffix: str = "...") -> str:
+    if len(text) <= length:
+        return text
+    return text[:length - len(suffix)] + suffix
 
 if __name__ == "__main__":
     cls()
