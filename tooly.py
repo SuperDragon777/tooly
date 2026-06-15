@@ -1,6 +1,6 @@
 __version__ = "1.6.0"
 __author__ = "SuperDragon777"
-__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner", "password", "env", "run", "humanize", "tempdir", "lorem", "every", "saves", "patch", "shutdown", "reboot", "hibernate", "lock_device", "cancel_shutdown", "is_admin", "pkill", "plist", "hwid", "music", "download", "ensure_package", "package_version", "ram", "cpu", "unzip", "remove", "md5", "triangle", "ordinal", "today", "ago", "sleep_until", "parse_date", "slugify", "truncate"]
+__all__ = ["ColorSystem", "measure", "spinner", "typewrite", "diff_highlight", "userinput", "recorder", "cls", "Platform", "on_platform", "menu", "confirm", "watch", "notify", "log", "retry", "countdown", "sparkline", "calendar", "progress", "banner", "password", "env", "run", "humanize", "tempdir", "lorem", "every", "saves", "patch", "shutdown", "reboot", "hibernate", "lock_device", "cancel_shutdown", "is_admin", "pkill", "plist", "hwid", "music", "download", "ensure_package", "package_version", "ram", "cpu", "unzip", "remove", "md5", "triangle", "ordinal", "today", "ago", "sleep_until", "parse_date", "slugify", "truncate", "ping"]
 
 import platform
 import sys
@@ -4644,6 +4644,107 @@ def truncate(text: str, length: int = 10, suffix: str = "...") -> str:
     if len(text) <= length:
         return text
     return text[:length - len(suffix)] + suffix
+
+@dataclass
+class PingResult:
+    host: str
+    success: bool
+    sent: int = 0
+    received: int = 0
+    loss: float = 0.0
+    min_ms: Optional[float] = None
+    avg_ms: Optional[float] = None
+    max_ms: Optional[float] = None
+    times: list[float] = field(default_factory=list)
+    error: Optional[str] = None
+
+    def __bool__(self):
+        return self.success
+
+
+def ping(
+    host: str,
+    *,
+    count: int = 4,
+    timeout: float = 2.0,
+    interval: float = 1.0,
+) -> PingResult:
+    def _windows_cmd() -> list[str]:
+        return ["ping", "-n", str(count), "-w", str(int(timeout * 1000)), host]
+
+    def _unix_cmd() -> list[str]:
+        return ["ping", "-c", str(count), "-W", str(int(timeout)), "-i", str(interval), host]
+
+    cmd = on_platform(
+        windows=_windows_cmd,
+        default=_unix_cmd,
+    )
+
+    try:
+        result = subprocess.run(
+            cmd,
+            text=True,
+            encoding="cp866" if platform.system() == "Windows" else "utf-8",
+            errors="replace",
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=timeout * count + 5,
+        )
+    except subprocess.TimeoutExpired:
+        log.error(f"ping: timeout pinging {host}")
+        return PingResult(host=host, success=False, sent=count, error="Timeout")
+    except FileNotFoundError:
+        log.error("ping: command not found")
+        return PingResult(host=host, success=False, error="ping command not found")
+    except Exception as e:
+        log.error(f"ping: {e}")
+        return PingResult(host=host, success=False, error=str(e))
+
+    output = result.stdout
+
+    times = [float(m.replace(",", ".")) for m in re.findall(r"(?:time|время)[=<]\s*([\d.,]+)\s*(?:ms|мс)", output, re.IGNORECASE)]
+
+    sent = count
+    received = len(times)
+
+    sent_match = re.search(r"(\d+)\s+packets transmitted", output)
+    recv_match = re.search(r"(\d+)\s+(?:packets\s+)?received", output)
+
+    if sent_match:
+        sent = int(sent_match.group(1))
+    if recv_match:
+        received = int(recv_match.group(1))
+
+    if platform.system() == "Windows":
+        win_match = re.search(r"=\s*(\d+)\s*,\s*\D*=\s*(\d+)\s*,\s*\D*=\s*(\d+)", output)
+        if win_match:
+            sent = int(win_match.group(1))
+            received = int(win_match.group(2))
+
+    loss = round((sent - received) / sent * 100, 1) if sent else 100.0
+    success = received > 0
+
+    min_ms = round(min(times), 2) if times else None
+    avg_ms = round(sum(times) / len(times), 2) if times else None
+    max_ms = round(max(times), 2) if times else None
+
+    if success:
+        log.success(f"ping {host}: {received}/{sent} received, {loss}% loss, avg {avg_ms}ms")
+    else:
+        log.error(f"ping {host}: {sent} sent, 0 received, 100% loss")
+
+    return PingResult(
+        host=host,
+        success=success,
+        sent=sent,
+        received=received,
+        loss=loss,
+        min_ms=min_ms,
+        avg_ms=avg_ms,
+        max_ms=max_ms,
+        times=times,
+    )
 
 if __name__ == "__main__":
     cls()
